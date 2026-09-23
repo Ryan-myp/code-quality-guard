@@ -43,6 +43,13 @@ class EnhancedAnalyzer:
             'fix': '使用 json.loads() 或 ast.literal_eval() 替代',
             'confidence': 0.95,
         },
+        'security.exec': {
+            'pattern': r'\bexec\s*\(',
+            'severity': Severity.CRITICAL,
+            'message': '检测到 exec() 使用，存在代码注入风险',
+            'fix': '重构代码避免使用 exec()',
+            'confidence': 0.95,
+        },
         'security.hardcoded_secret': {
             'pattern': r'''(?:password|secret|api_key|token|private_key)\s*=\s*["\'][^"\']+["\']''',
             'severity': Severity.CRITICAL,
@@ -70,6 +77,27 @@ class EnhancedAnalyzer:
             'message': '检测到命令注入风险',
             'fix': '使用 subprocess.run() 参数列表',
             'confidence': 0.90,
+        },
+        'security.unsafe_deserialization': {
+            'pattern': r'yaml\.load\s*\([^)]*Loader\s*=|pickle\.loads?\s*\(|marshal\.loads?\s*\(',
+            'severity': Severity.CRITICAL,
+            'message': '检测到不安全的反序列化，存在代码执行风险',
+            'fix': '使用安全的反序列化方法，如 yaml.safe_load()',
+            'confidence': 0.90,
+        },
+        'security.path_traversal': {
+            'pattern': r'open\s*\([^)]*(?:\.\.|\.\\|\$\{|%s|%\()',
+            'severity': Severity.HIGH,
+            'message': '检测到潜在的路径遍历风险',
+            'fix': '对用户输入进行路径规范化处理',
+            'confidence': 0.80,
+        },
+        'security.insecure_random': {
+            'pattern': r'random\.random\s*\(|random\.randint\s*\(|random\.choice\s*\(',
+            'severity': Severity.WARNING,
+            'message': '检测到使用不安全的随机数生成器',
+            'fix': '使用 secrets 模块生成安全随机数',
+            'confidence': 0.85,
         },
     }
     
