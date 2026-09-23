@@ -1,0 +1,218 @@
+# Code Quality Guard v22 测试套件
+# 生成时间: 2026-09-23
+
+test_cases:
+  # ===== 安全测试（Critical）=====
+  
+  - id: test_eval_exec_basic
+    name: "检测基础 eval/exec"
+    category: security
+    severity: critical
+    code: |
+      result = eval(user_input)
+      exec(dangerous_code)
+    expected_issues:
+      - rule_id: security.eval_exec
+        severity: critical
+        count: 1
+      - rule_id: security.exec
+        severity: critical
+        count: 1
+  
+  - id: test_eval_exec_safe
+    name: "安全的 eval 替代方案"
+    category: security
+    severity: critical
+    code: |
+      result = json.loads(user_input)
+      result = ast.literal_eval(user_input)
+    expected_issues: []
+  
+  - id: test_hardcoded_password
+    name: "检测硬编码密码"
+    category: security
+    severity: critical
+    code: |
+      password = "my_secret_password"
+      api_key = "sk-123456789"
+      db_password = "admin123"
+    expected_issues:
+      - rule_id: security.hardcoded_secret
+        severity: critical
+        count: 3
+  
+  - id: test_hardcoded_password_safe
+    name: "安全的密码获取方式"
+    category: security
+    severity: critical
+    code: |
+      password = os.environ.get('PASSWORD')
+      api_key = get_secret('api_key')
+    expected_issues: []
+  
+  - id: test_sql_injection
+    name: "检测 SQL 注入"
+    category: security
+    severity: critical
+    code: |
+      query = f"SELECT * FROM users WHERE id = {user_id}"
+      cursor.execute(f"DELETE FROM orders WHERE id = {order_id}")
+    expected_issues:
+      - rule_id: security.sql_injection
+        severity: critical
+        count: 2
+  
+  - id: test_sql_safe
+    name: "安全的参数化查询"
+    category: security
+    severity: critical
+    code: |
+      cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+      cursor.execute("DELETE FROM orders WHERE id = ?", (order_id,))
+    expected_issues: []
+  
+  - id: test_ssl_disabled
+    name: "检测 SSL 禁用"
+    category: security
+    severity: critical
+    code: |
+      requests.get(url, verify=False)
+      session.verify = False
+    expected_issues:
+      - rule_id: security.ssl_disabled
+        severity: critical
+        count: 2
+  
+  - id: test_ssl_enabled
+    name: "安全的 SSL 配置"
+    category: security
+    severity: critical
+    code: |
+      requests.get(url, verify=True)
+      requests.get(url)
+    expected_issues: []
+  
+  - id: test_command_injection
+    name: "检测命令注入"
+    category: security
+    severity: critical
+    code: |
+      os.system(cmd)
+      subprocess.call(cmd, shell=True)
+    expected_issues:
+      - rule_id: security.command_injection
+        severity: critical
+        count: 2
+  
+  - id: test_command_safe
+    name: "安全的命令执行"
+    category: security
+    severity: critical
+    code: |
+      subprocess.run(['ls', '-l'])
+      subprocess.run(cmd.split())
+    expected_issues: []
+  
+  # ===== 错误处理测试（High）=====
+  
+  - id: test_bare_except
+    name: "检测裸 except"
+    category: error_handling
+    severity: high
+    code: |
+      try:
+          do_something()
+      except:
+          pass
+    expected_issues:
+      - rule_id: ai_slop.bare_except
+        severity: high
+        count: 1
+  
+  - id: test_swallow_exception
+    name: "检测异常吞没"
+    category: error_handling
+    severity: high
+    code: |
+      try:
+          do_something()
+      except:
+          pass
+    expected_issues:
+      - rule_id: ai_slop.swallow_exception
+        severity: high
+        count: 1
+  
+  - id: test_specific_exception
+    name: "正确的异常处理"
+    category: error_handling
+    severity: high
+    code: |
+      try:
+          value = int(user_input)
+      except ValueError:
+          logger.warning(f"Invalid input: {user_input}")
+          return None
+    expected_issues: []
+  
+  # ===== 代码质量测试（Warning）=====
+  
+  - id: test_function_too_long
+    name: "检测函数过长"
+    category: code_quality
+    severity: warning
+    code: |
+      def long_function():
+          a = 1
+          b = 2
+          c = 3
+          # ... 50+ 行代码
+          return result
+    expected_issues:
+      - rule_id: code_quality.function_too_long
+        severity: warning
+        count: 1
+  
+  - id: test_too_many_parameters
+    name: "检测参数过多"
+    category: code_quality
+    severity: warning
+    code: |
+      def func(a, b, c, d, e, f, g, h):
+          return a + b + c + d + e + f + g + h
+    expected_issues:
+      - rule_id: code_quality.too_many_parameters
+        severity: warning
+        count: 1
+  
+  - id: test_deep_nesting
+    name: "检测嵌套过深"
+    category: code_quality
+    severity: warning
+    code: |
+      def process(items):
+          for item in items:
+              if item.is_valid:
+                  if item.has_permission:
+                      if item.status == 'active':
+                          do_something(item)
+    expected_issues:
+      - rule_id: code_quality.deep_nesting
+        severity: warning
+        count: 1
+  
+  - id: test_redundant_todo
+    name: "检测冗余 TODO"
+    category: code_quality
+    severity: info
+    code: |
+      # TODO: 重构这个函数
+      def old_function():
+          pass
+      
+      # FIXME: 这里有个 bug
+      x = 1 + 1
+    expected_issues:
+      - rule_id: ai_slop.redundant_todo
+        severity: info
+        count: 2

@@ -1,0 +1,180 @@
+# Code Quality Guard v22 Rules
+# 规则定义文件
+
+version: "22.0.0"
+description: "AI Coding Agent 代码质量守护规则集"
+
+rules:
+  # ===== 安全规则（Critical）=====
+  
+  - id: security.eval_exec
+    name: "禁止 eval()/exec()"
+    category: security
+    severity: critical
+    description: "eval() 和 exec() 可以执行任意代码，存在严重安全风险"
+    patterns:
+      - r"\beval\s*\("
+      - r"\bexec\s*\("
+    fix: "使用 json.loads() 或 ast.literal_eval() 替代"
+    examples:
+      negative:
+        - "result = eval(user_input)"
+        - "exec(dangerous_code)"
+      positive:
+        - "result = json.loads(user_input)"
+        - "result = ast.literal_eval(user_input)"
+    confidence: 0.95
+    
+  - id: security.hardcoded_secret
+    name: "禁止硬编码密钥"
+    category: security
+    severity: critical
+    description: "硬编码的密码、API 密钥等密钥会泄露敏感信息"
+    patterns:
+      - r"(?i)(password|secret|api_key|token|private_key)\s*=\s*[\"'][^\"']+[\"']"
+    fix: "使用环境变量或密钥管理服务"
+    examples:
+      negative:
+        - 'password = "my_secret_password"'
+        - 'api_key = "sk-123456789"'
+      positive:
+        - "password = os.environ.get('PASSWORD')"
+        - "api_key = get_secret('api_key')"
+    confidence: 0.90
+    
+  - id: security.sql_injection
+    name: "检测 SQL 注入风险"
+    category: security
+    severity: critical
+    description: "SQL 语句中拼接用户输入会导致 SQL 注入漏洞"
+    patterns:
+      - r"(?i)(execute|cursor\.execute|query)\s*\(\s*f?[\"'](?:SELECT|INSERT|UPDATE|DELETE)[^\"']*\{"
+    fix: "使用参数化查询"
+    examples:
+      negative:
+        - 'query = f"SELECT * FROM users WHERE id = {user_id}"'
+        - 'cursor.execute(f"SELECT * FROM users WHERE name = \'{name}\'")'
+      positive:
+        - 'cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))'
+        - 'cursor.execute("SELECT * FROM users WHERE name = ?", (name,))'
+    confidence: 0.85
+    
+  - id: security.ssl_disabled
+    name: "检测 SSL 验证禁用"
+    category: security
+    severity: critical
+    description: "禁用 SSL 验证会导致中间人攻击风险"
+    patterns:
+      - r"verify\s*=\s*False"
+    fix: "启用 SSL 验证: verify=True"
+    examples:
+      negative:
+        - "requests.get(url, verify=False)"
+        - "http.client.HTTPSConnection(..., context=ssl._create_unverified_context())"
+      positive:
+        - "requests.get(url, verify=True)"
+        - "requests.get(url)"  # 默认就是 True
+    confidence: 0.95
+    
+  - id: security.command_injection
+    name: "检测命令注入风险"
+    category: security
+    severity: critical
+    description: "命令注入可能导致远程代码执行"
+    patterns:
+      - r"os\.system\s*\("
+      - r"subprocess\.call\s*\([^)]*shell\s*=\s*True"
+    fix: "使用 subprocess.run() 参数列表"
+    examples:
+      negative:
+        - "os.system(cmd)"
+        - "subprocess.call(cmd, shell=True)"
+      positive:
+        - "subprocess.run(cmd.split())"
+        - "subprocess.run(['ls', '-l'])"
+    confidence: 0.90
+  
+  # ===== 错误处理规则（High）=====
+  
+  - id: ai_slop.bare_except
+    name: "禁止裸 except"
+    category: error_handling
+    severity: high
+    description: "裸 except 会捕获所有异常，包括 SystemExit 和 KeyboardInterrupt"
+    patterns:
+      - r"except\s*:"
+    fix: "捕获具体异常类型"
+    examples:
+      negative:
+        - "try:\n    do_something()\nexcept:\n    pass"
+      positive:
+        - "try:\n    do_something()\nexcept ValueError:\n    handle_error()"
+    confidence: 0.95
+    
+  - id: ai_slop.swallow_exception
+    name: "禁止吞没异常"
+    category: error_handling
+    severity: high
+    description: "吞没异常会导致错误难以调试"
+    patterns:
+      - r"except.*?:\s*\n\s+pass"
+    fix: "记录日志并重新抛出"
+    examples:
+      negative:
+        - "except:\n    pass"
+      positive:
+        - "except Exception as e:\n    logger.error(f'Error: {e}')\n    raise"
+    confidence: 0.90
+    
+  - id: ai_slop.generic_exception
+    name: "推荐捕获具体异常"
+    category: error_handling
+    severity: high
+    description: "捕获通用 Exception 会掩盖潜在问题"
+    patterns:
+      - r"except\s+Exception\s*:"
+    fix: "捕获具体异常类型"
+    examples:
+      negative:
+        - "except Exception as e:"
+      positive:
+        - "except ValueError as e:"
+        - "except (ValueError, TypeError) as e:"
+    confidence: 0.85
+  
+  # ===== 代码质量规则（Warning）=====
+  
+  - id: code_quality.function_too_long
+    name: "函数过长检测"
+    category: code_quality
+    severity: warning
+    description: "过长的函数难以理解和维护"
+    threshold: 50  # 行数
+    fix: "拆分为多个职责单一的子函数"
+    confidence: 0.80
+    
+  - id: code_quality.too_many_parameters
+    name: "参数过多检测"
+    category: code_quality
+    severity: warning
+    description: "参数过多降低可读性和可维护性"
+    threshold: 7  # 参数数量
+    fix: "使用对象封装参数"
+    confidence: 0.85
+    
+  - id: code_quality.deep_nesting
+    name: "嵌套过深检测"
+    category: code_quality
+    severity: warning
+    description: "过深的嵌套降低可读性"
+    threshold: 4  # 嵌套深度
+    fix: "提取为独立函数或使用 early return"
+    confidence: 0.80
+  
+  - id: ai_slop.redundant_todo
+    name: "冗余 TODO/FIXME 检测"
+    category: code_quality
+    severity: info
+    description: "长期未处理的 TODO/FIXME 可能是技术债务"
+    fix: "创建任务或直接修复"
+    confidence: 0.70

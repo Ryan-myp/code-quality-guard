@@ -1,0 +1,51 @@
+{
+  "version": "22.0.0",
+  "total_samples": 5,
+  "samples": [
+    {
+      "id": "sample_001",
+      "name": "eval_exec_basic",
+      "category": "security",
+      "severity": "critical",
+      "file_path": "benchmarks/v22/sample_001_eval_exec.py",
+      "code": "result = eval(user_input)\nexec(dangerous_code)",
+      "expected_issues": ["security.eval_exec", "security.exec"]
+    },
+    {
+      "id": "sample_002",
+      "name": "hardcoded_secret",
+      "category": "security",
+      "severity": "critical",
+      "file_path": "benchmarks/v22/sample_002_hardcoded_secret.py",
+      "code": "password = 'my_secret_password'\napi_key = 'sk-123456789'",
+      "expected_issues": ["security.hardcoded_secret"]
+    },
+    {
+      "id": "sample_003",
+      "name": "sql_injection",
+      "category": "security",
+      "severity": "critical",
+      "file_path": "benchmarks/v22/sample_003_sql_injection.py",
+      "code": "query = f'SELECT * FROM users WHERE id = {user_id}'",
+      "expected_issues": ["security.sql_injection"]
+    },
+    {
+      "id": "sample_004",
+      "name": "bare_except",
+      "category": "error_handling",
+      "severity": "high",
+      "file_path": "benchmarks/v22/sample_004_bare_except.py",
+      "code": "try:\n    do_something()\nexcept:\n    pass",
+      "expected_issues": ["ai_slop.bare_except", "ai_slop.swallow_exception"]
+    },
+    {
+      "id": "sample_005",
+      "name": "function_too_long",
+      "category": "code_quality",
+      "severity": "warning",
+      "file_path": "benchmarks/v22/sample_005_long_function.py",
+      "code": "def long_function():\n    a = 1\n    b = 2\n    # ... 50+ 行",
+      "expected_issues": ["code_quality.function_too_long"]
+    }
+  ]
+}
