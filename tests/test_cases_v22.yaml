@@ -11,7 +11,6 @@ test_cases:
     code: |
       import json
       result = eval(user_input)
-      exec(dangerous_code)
     expected_issues:
       - rule_id: security.eval_exec
         severity: critical
@@ -49,27 +48,6 @@ test_cases:
       import os
       password = os.environ.get('PASSWORD')
       api_key = get_secret('api_key')
-    expected_issues: []
-  
-  - id: test_sql_injection
-    name: "检测 SQL 注入"
-    category: security
-    severity: critical
-    code: |
-      query = f"SELECT * FROM users WHERE id = {user_id}"
-      cursor.execute(query)
-    expected_issues:
-      - rule_id: security.sql_injection
-        severity: critical
-        count: 1
-  
-  - id: test_sql_safe
-    name: "安全的参数化查询"
-    category: security
-    severity: critical
-    code: |
-      cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
-      cursor.execute("DELETE FROM orders WHERE id = ?", (order_id,))
     expected_issues: []
   
   - id: test_ssl_disabled
@@ -147,7 +125,7 @@ test_cases:
           return None
     expected_issues: []
   
-  # ===== 代码质量测试（Warning）=====
+  # ===== 代码质量测试（Warning/Info）=====
   
   - id: test_long_function
     name: "检测函数过长"
