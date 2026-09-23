@@ -98,13 +98,6 @@ class EnhancedAnalyzer:
         },
     }
     
-    # 代码质量规则（阈值）
-    CODE_QUALITY_THRESHOLDS = {
-        'max_function_length': 50,
-        'max_parameters': 7,
-        'max_nesting_depth': 4,
-    }
-    
     def __init__(self, spec: Optional[ProjectSpec] = None):
         self.spec = spec or ProjectSpec()
         self.issues: List[Issue] = []
@@ -118,12 +111,6 @@ class EnhancedAnalyzer:
         
         # 文本模式匹配
         self._analyze_patterns(code)
-        
-        # 过滤不符合严重级别的发现
-        self.issues = [
-            issue for issue in self.issues
-            if self._should_report(issue)
-        ]
         
         return self.issues
     
@@ -282,26 +269,6 @@ class EnhancedAnalyzer:
                 max_depth = max(max_depth, child_depth)
         
         return max_depth
-    
-    def _should_report(self, issue: Issue) -> bool:
-        """判断是否应该报告"""
-        severity_order = {
-            Severity.CRITICAL: 4,
-            Severity.HIGH: 3,
-            Severity.WARNING: 2,
-            Severity.INFO: 1,
-        }
-        
-        max_severity_map = {
-            'critical': Severity.CRITICAL,
-            'high': Severity.HIGH,
-            'warning': Severity.WARNING,
-            'info': Severity.INFO,
-        }
-        
-        max_sev = max_severity_map.get(self.spec.security.max_severity, Severity.CRITICAL)
-        
-        return severity_order[issue.severity] >= severity_order[max_sev]
     
     def get_summary(self) -> Dict[str, Any]:
         """获取分析摘要"""
