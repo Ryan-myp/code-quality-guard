@@ -1,8 +1,88 @@
 {
-  "true_positives": 2,
-  "false_positives": 6,
-  "false_negatives": 1,
-  "precision": 0.25,
-  "recall": 0.667,
-  "f1": 0.364
+  "evaluation_unit": "unique rule IDs per annotated sample",
+  "annotated_samples": 5,
+  "true_positives": 7,
+  "false_positives": 0,
+  "false_negatives": 0,
+  "precision": 1.0,
+  "recall": 1.0,
+  "f1": 1.0,
+  "samples": [
+    {
+      "id": "sample_001",
+      "expected": [
+        "security.eval_exec",
+        "security.exec"
+      ],
+      "detected": [
+        "security.eval_exec",
+        "security.exec"
+      ],
+      "matched": [
+        "security.eval_exec",
+        "security.exec"
+      ],
+      "false_positives": [],
+      "false_negatives": []
+    },
+    {
+      "id": "sample_002",
+      "expected": [
+        "security.hardcoded_secret"
+      ],
+      "detected": [
+        "security.hardcoded_secret"
+      ],
+      "matched": [
+        "security.hardcoded_secret"
+      ],
+      "false_positives": [],
+      "false_negatives": []
+    },
+    {
+      "id": "sample_003",
+      "expected": [
+        "security.sql_injection"
+      ],
+      "detected": [
+        "security.sql_injection"
+      ],
+      "matched": [
+        "security.sql_injection"
+      ],
+      "false_positives": [],
+      "false_negatives": []
+    },
+    {
+      "id": "sample_004",
+      "expected": [
+        "ai_slop.bare_except",
+        "ai_slop.swallow_exception"
+      ],
+      "detected": [
+        "ai_slop.bare_except",
+        "ai_slop.swallow_exception"
+      ],
+      "matched": [
+        "ai_slop.bare_except",
+        "ai_slop.swallow_exception"
+      ],
+      "false_positives": [],
+      "false_negatives": []
+    },
+    {
+      "id": "sample_005",
+      "expected": [
+        "code_quality.function_too_long"
+      ],
+      "detected": [
+        "code_quality.function_too_long"
+      ],
+      "matched": [
+        "code_quality.function_too_long"
+      ],
+      "false_positives": [],
+      "false_negatives": []
+    }
+  ]
 }

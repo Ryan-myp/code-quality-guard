@@ -111,7 +111,7 @@ test_cases:
     expected_issues:
       - rule_id: ai_slop.bare_except
         severity: high
-        count: 2  # AST 和文本模式都会检测到
+        count: 1
   
   - id: test_specific_exception
     name: "正确的异常处理"

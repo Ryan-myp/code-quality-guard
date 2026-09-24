@@ -17,6 +17,16 @@ class Feedback:
     reason: str
     timestamp: str
     user_id: Optional[str] = None
+
+    def __post_init__(self):
+        for field_name in ("issue_id", "rule_id", "reason", "timestamp"):
+            value = getattr(self, field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError("{} must be a non-empty string".format(field_name))
+        if not isinstance(self.false_positive, bool):
+            raise ValueError("false_positive must be a boolean")
+        if self.user_id is not None and not isinstance(self.user_id, str):
+            raise ValueError("user_id must be a string when provided")
     
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -26,19 +36,19 @@ class FeedbackCollector:
     """反馈收集器"""
     
     def __init__(self, storage_path: Optional[Path] = None):
-        self.storage_path = storage_path or Path('.qguard/feedback.json')
+        self.storage_path = Path(storage_path) if storage_path else Path('.qguard/feedback.json')
         self.feedbacks: List[Feedback] = []
         self._load()
     
     def collect(self, feedback: Feedback) -> None:
         """收集反馈"""
-        self.feedbacks.append(feedback)
-        self._save()
-    
+        self.collect_many([feedback])
+
     def collect_many(self, feedbacks: List[Feedback]) -> None:
         """批量收集反馈"""
-        self.feedbacks.extend(feedbacks)
-        self._save()
+        updated_feedbacks = self.feedbacks + list(feedbacks)
+        self._save(updated_feedbacks)
+        self.feedbacks = updated_feedbacks
     
     def get_statistics(self) -> Dict[str, Any]:
         """获取反馈统计"""
@@ -86,24 +96,40 @@ class FeedbackCollector:
             try:
                 with open(self.storage_path, 'r') as f:
                     data = json.load(f)
-                    self.feedbacks = [Feedback(**item) for item in data.get('feedbacks', [])]
-            except (json.JSONDecodeError, TypeError):
-                self.feedbacks = []
+            except (json.JSONDecodeError, UnicodeDecodeError) as error:
+                raise ValueError(
+                    "Invalid feedback JSON in {}: {}".format(self.storage_path, error)
+                ) from error
+            if not isinstance(data, dict) or not isinstance(data.get('feedbacks', []), list):
+                raise ValueError(
+                    "Feedback file must contain a feedbacks list: {}".format(self.storage_path)
+                )
+            try:
+                self.feedbacks = [Feedback(**item) for item in data.get('feedbacks', [])]
+            except (TypeError, ValueError) as error:
+                raise ValueError(
+                    "Invalid feedback entry in {}: {}".format(self.storage_path, error)
+                ) from error
     
-    def _save(self) -> None:
+    def _save(self, feedbacks: Optional[List[Feedback]] = None) -> None:
         """保存反馈"""
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+        feedbacks_to_save = self.feedbacks if feedbacks is None else feedbacks
         data = {
             'version': '1.0',
             'updated': datetime.now().isoformat(),
-            'feedbacks': [f.to_dict() for f in self.feedbacks],
+            'feedbacks': [f.to_dict() for f in feedbacks_to_save],
         }
         with open(self.storage_path, 'w') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
     
     def export_report(self, output_path: Optional[Path] = None) -> Path:
         """导出反馈报告"""
-        report_path = output_path or (self.storage_path.parent / 'feedback_report.json')
+        report_path = (
+            Path(output_path)
+            if output_path
+            else self.storage_path.parent / 'feedback_report.json'
+        )
         
         report = {
             'generated_at': datetime.now().isoformat(),
@@ -112,6 +138,7 @@ class FeedbackCollector:
             'feedbacks': [f.to_dict() for f in self.feedbacks],
         }
         
+        report_path.parent.mkdir(parents=True, exist_ok=True)
         with open(report_path, 'w') as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
         

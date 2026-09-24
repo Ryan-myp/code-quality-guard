@@ -54,7 +54,10 @@ class FixSuggester:
         'ai_slop.swallow_exception': {
             'template': '记录日志并重新抛出',
             'examples': [
-                ('except:\n    pass', 'except Exception as e:\n    logger.error(f"Error: {e}")\n    raise'),
+                (
+                    'except:\n    pass',
+                    'except Exception as e:\n    logger.error(f"Error: {e}")\n    raise',
+                ),
             ]
         },
         'code_quality.function_too_long': {
@@ -99,7 +102,7 @@ class FixSuggester:
         # 如果没有匹配模板，使用通用建议
         return {
             'rule_id': rule_id,
-            'template': '请根据上下文手动修复',
+            'template': issue.fix or '请根据上下文手动修复',
             'severity': issue.severity.value,
             'line': issue.line,
             'message': issue.message,

@@ -1,13 +1,7 @@
 """
 增强分析器测试 - v22 新增规则
 """
-import sys
-from pathlib import Path
-
-# 添加项目根目录到路径
-sys.path.insert(0, str(Path(__file__).parent.parent / "engines"))
-
-from enhanced_analyzer import EnhancedAnalyzer, Severity
+from engines.enhanced_analyzer import EnhancedAnalyzer, Severity
 
 
 def test_exec_detection():
@@ -42,7 +36,11 @@ def test_unsafe_deserialization():
 
 def test_insecure_random():
     """测试不安全随机数检测"""
-    analyzer = EnhancedAnalyzer()
+    from engines.spec_parser import ProjectSpec, SecuritySpec
+
+    analyzer = EnhancedAnalyzer(
+        ProjectSpec(security=SecuritySpec(max_severity="warning"))
+    )
     
     code = """
 import random

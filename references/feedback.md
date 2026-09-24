@@ -1,50 +1,23 @@
-# 反馈收集指南
+# Feedback Storage
 
-## 为什么需要反馈？
+`engines.feedback_collector.FeedbackCollector` stores user-reviewed feedback locally in `.qguard/feedback.json` by default. It can summarize false-positive reports and export a JSON report.
 
-反馈是系统学习进化的核心。通过收集误报和漏报，系统可以不断优化规则阈值。
+This storage helper does **not** connect to the CLI, change rule thresholds, train a model, or automatically tune rules. Invalid feedback files raise an error instead of being silently discarded. The collector does not persist source code, but feedback reasons and user IDs may contain personal or sensitive information; review the file before sharing it.
 
-## 如何提交反馈？
+```python
+from engines.feedback_collector import Feedback, FeedbackCollector
 
-### 方式 1：命令行
-```bash
-python scripts/qguard.py /path/to/project --feedback-rule=security.eval_exec --feedback-type=false-positive
+collector = FeedbackCollector()
+collector.collect(
+    Feedback(
+        issue_id="finding-123",
+        rule_id="security.eval_exec",
+        false_positive=True,
+        reason="The call is to ast.literal_eval, not the builtin eval.",
+        timestamp="2026-09-24T12:00:00Z",
+    )
+)
+report_path = collector.export_report()
 ```
 
-### 方式 2：交互式
-分析完成后，系统会询问是否提交反馈：
-```
-是否提交反馈？(y/n): y
-规则: security.eval_exec
-反馈类型: [误报] [漏报] [建议改进]
-原因: 
-```
-
-### 方式 3：直接编辑
-编辑 `.qguard/feedback.json` 文件：
-```json
-{
-  "feedbacks": [
-    {
-      "issue_id": "abc123",
-      "rule_id": "security.eval_exec",
-      "false_positive": true,
-      "reason": "这是动态表单渲染，必须使用 eval",
-      "timestamp": "2026-09-23T10:00:00Z"
-    }
-  ]
-}
-```
-
-## 反馈的用途
-
-1. **误报检测**: 识别过严的规则
-2. **漏报发现**: 发现遗漏的检测场景
-3. **阈值调整**: 自动优化规则参数
-4. **规则进化**: 长期积累优化方向
-
-## 隐私说明
-
-- 反馈仅存储在本地，不会上传到服务器
-- 不包含代码内容，只包含元数据
-- 可以手动删除 `.qguard/feedback.json`
+Delete `.qguard/feedback.json` to remove locally stored feedback.

@@ -1,61 +1,39 @@
 {
-  "test_time": "2026-09-23T10:08:17.524014",
-  "total_samples": 5,
-  "total_issues": 4,
-  "samples_with_issues": 3,
-  "results": [
-    {
-      "id": "sample_001",
-      "path": "benchmarks/sample_001_eval_exec.json",
-      "issues_found": 1,
-      "issues": [
-        {
-          "rule_id": "security.eval_exec",
-          "severity": "critical",
-          "description": "使用 eval()"
-        }
-      ]
-    },
-    {
-      "id": "sample_002",
-      "path": "benchmarks/sample_002_bare_except.json",
-      "issues_found": 2,
-      "issues": [
-        {
-          "rule_id": "ai_slop.bare_except",
-          "severity": "medium",
-          "description": "裸 except"
-        },
-        {
-          "rule_id": "ai_slop.swallow_exception",
-          "severity": "high",
-          "description": "异常被吞没"
-        }
-      ]
-    },
-    {
-      "id": "sample_003",
-      "path": "benchmarks/sample_003_hardcoded_secret.json",
-      "issues_found": 1,
-      "issues": [
-        {
-          "rule_id": "security.hardcoded_secret",
-          "severity": "critical",
-          "description": "可能硬编码了密码"
-        }
-      ]
-    },
-    {
-      "id": "sample_004",
-      "path": "benchmarks/sample_004_long_function.json",
-      "issues_found": 0,
-      "issues": []
-    },
-    {
-      "id": "sample_005",
-      "path": "benchmarks/sample_005_sql_injection.json",
-      "issues_found": 0,
-      "issues": []
-    }
-  ]
+  "run_date": "2026-09-24",
+  "pytest": {
+    "command": "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q",
+    "passed": 68,
+    "failed": 0
+  },
+  "legacy_smoke_suite": {
+    "command": "python3 scripts/run_tests.py",
+    "passed": 14,
+    "failed": 0
+  },
+  "quality_gate": {
+    "command": "python3 scripts/qguard.py gate . --min-score 70",
+    "result": "pass",
+    "score": 100.0,
+    "findings": 0,
+    "exit_code": 0
+  },
+  "changed_module_coverage": {
+    "command": "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m coverage run --source=engines,scripts --omit=scripts/run_tests.py -m pytest -q",
+    "percent": 84
+  },
+  "annotated_benchmark": {
+    "command": "python3 scripts/evaluate_benchmark.py",
+    "samples": 5,
+    "true_positives": 7,
+    "false_positives": 0,
+    "false_negatives": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0
+  },
+  "package": {
+    "version": "22.1.0a1",
+    "wheel_build": "passed",
+    "installed_cli_smoke_test": "passed"
+  }
 }

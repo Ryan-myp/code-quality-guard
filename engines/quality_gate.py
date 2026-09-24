@@ -1,9 +1,9 @@
-"""
-质量门禁 - 判断是否通过质量检查
-"""
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
+"""Quality gate for analyzer findings."""
+
+from dataclasses import dataclass, field
 from enum import Enum
+from math import isfinite
+from typing import Any, Dict, List, Optional
 
 from .enhanced_analyzer import Issue, Severity
 
@@ -16,146 +16,143 @@ class GateResult(Enum):
 
 @dataclass
 class GateConfig:
-    """质量门禁配置"""
-    # 允许的最大问题数量
+    """Limits used to decide whether a scan passes."""
+
     max_critical: int = 0
     max_high: int = 5
     max_warning: int = 20
     max_info: int = 100
-    
-    # 最低置信度要求
     min_confidence: float = 0.7
-    
-    # 禁止的规则（即使其他配置允许）
-    forbidden_rules: List[str] = None
-    
+    forbidden_rules: List[str] = field(default_factory=list)
+
     def __post_init__(self):
-        if self.forbidden_rules is None:
-            self.forbidden_rules = []
+        for name in ("max_critical", "max_high", "max_warning", "max_info"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError("{} must be a non-negative integer".format(name))
+        if (
+            isinstance(self.min_confidence, bool)
+            or not isinstance(self.min_confidence, (int, float))
+            or not isfinite(self.min_confidence)
+            or not 0.0 <= self.min_confidence <= 1.0
+        ):
+            raise ValueError("min_confidence must be between 0 and 1")
+        if not isinstance(self.forbidden_rules, list) or not all(
+            isinstance(rule, str) and rule for rule in self.forbidden_rules
+        ):
+            raise ValueError("forbidden_rules must be a list of non-empty strings")
 
 
 class QualityGate:
-    """质量门禁"""
-    
+    """Evaluate findings against configured issue limits."""
+
     def __init__(self, config: Optional[GateConfig] = None):
         self.config = config or GateConfig()
         self.result: Optional[GateResult] = None
         self.details: Dict[str, Any] = {}
-    
-    def check(self, issues: List[Issue]) -> GateResult:
-        """检查问题列表是否通过门禁"""
-        # 统计问题数量
-        counts = {
-            Severity.CRITICAL: 0,
-            Severity.HIGH: 0,
-            Severity.WARNING: 0,
-            Severity.INFO: 0,
-        }
-        
+
+    def _counts(self, issues: List[Issue]) -> Dict[Severity, int]:
+        counts = {severity: 0 for severity in Severity}
         for issue in issues:
-            if issue.confidence < self.config.min_confidence:
-                continue
-            counts[issue.severity] += 1
-        
-        # 检查是否有禁止的规则
-        violated_forbidden = [
-            issue for issue in issues
+            if issue.confidence >= self.config.min_confidence:
+                counts[issue.severity] += 1
+        return counts
+
+    @staticmethod
+    def _serialized_counts(counts: Dict[Severity, int]) -> Dict[str, int]:
+        return {severity.name: count for severity, count in counts.items()}
+
+    def check(self, issues: List[Issue]) -> GateResult:
+        """Check the findings and store a machine-readable explanation."""
+        counts = self._counts(issues)
+        count_data = self._serialized_counts(counts)
+        violations = [
+            issue.rule_id
+            for issue in issues
             if issue.rule_id in self.config.forbidden_rules
             and issue.confidence >= self.config.min_confidence
         ]
-        
-        if violated_forbidden:
-            self.result = GateResult.FAIL
-            self.details = {
-                'reason': 'violated_forbidden_rules',
-                'violations': [i.rule_id for i in violated_forbidden],
-                'counts': {s.name: c for s, c in counts.items()},
-            }
-            return self.result
-        
-        # 检查数量限制
-        if counts[Severity.CRITICAL] > self.config.max_critical:
-            self.result = GateResult.FAIL
-            self.details = {
-                'reason': 'too_many_critical',
-                'counts': {s.name: c for s, c in counts.items()},
-            }
-            return self.result
-        
-        if counts[Severity.HIGH] > self.config.max_high:
-            self.result = GateResult.FAIL
-            self.details = {
-                'reason': 'too_many_high',
-                'counts': {s.name: c for s, c in counts.items()},
-            }
-            return self.result
-        
-        # 警告状态
-        if counts[Severity.WARNING] > self.config.max_warning:
-            self.result = GateResult.WARN
-            self.details = {
-                'reason': 'too_many_warnings',
-                'counts': {s.name: c for s, c in counts.items()},
-            }
-            return self.result
-        
-        # 通过
-        self.result = GateResult.PASS
-        self.details = {
-            'reason': 'all_clear',
-            'counts': {s.name: c for s, c in counts.items()},
-        }
-        return self.result
-    
+        if violations:
+            return self._set_result(
+                GateResult.FAIL,
+                "violated_forbidden_rules",
+                count_data,
+                violations=violations,
+            )
+
+        limits = (
+            (Severity.CRITICAL, self.config.max_critical, GateResult.FAIL, "too_many_critical"),
+            (Severity.HIGH, self.config.max_high, GateResult.FAIL, "too_many_high"),
+            (Severity.WARNING, self.config.max_warning, GateResult.WARN, "too_many_warnings"),
+            (Severity.INFO, self.config.max_info, GateResult.WARN, "too_many_info"),
+        )
+        for severity, limit, result, reason in limits:
+            if counts[severity] > limit:
+                return self._set_result(result, reason, count_data)
+
+        return self._set_result(GateResult.PASS, "all_clear", count_data)
+
+    def _set_result(
+        self,
+        result: GateResult,
+        reason: str,
+        counts: Dict[str, int],
+        **extra: Any
+    ) -> GateResult:
+        self.result = result
+        self.details = {"reason": reason, "counts": counts}
+        self.details.update(extra)
+        return result
+
+    def fail(self, reason: str, **extra: Any) -> GateResult:
+        """Mark the current scan as failed for an operational or external policy reason."""
+        return self._set_result(
+            GateResult.FAIL,
+            reason,
+            self.details.get("counts", {}),
+            **extra
+        )
+
     def get_score(self, issues: List[Issue]) -> float:
-        """计算质量分数 (0-100)"""
-        if not issues:
-            return 100.0
-        
-        # 加权扣分
+        """Compute the legacy 0-100 severity-weighted score."""
         penalties = {
             Severity.CRITICAL: 20,
             Severity.HIGH: 10,
             Severity.WARNING: 5,
             Severity.INFO: 1,
         }
-        
         total_penalty = sum(
             penalties[issue.severity] * issue.confidence
             for issue in issues
             if issue.confidence >= self.config.min_confidence
         )
-        
-        score = max(0, 100 - total_penalty)
-        return round(score, 2)
-    
-    def get_badge(self, score: float) -> str:
-        """根据分数返回徽章等级"""
+        return round(max(0.0, 100.0 - total_penalty), 2)
+
+    @staticmethod
+    def get_badge(score: float) -> str:
         if score >= 90:
             return "A"
-        elif score >= 80:
+        if score >= 80:
             return "B"
-        elif score >= 70:
+        if score >= 70:
             return "C"
-        elif score >= 60:
+        if score >= 60:
             return "D"
-        else:
-            return "F"
-    
+        return "F"
+
     def get_report(self, issues: List[Issue]) -> Dict[str, Any]:
-        """生成完整报告"""
+        """Generate a report, evaluating the gate if it has not run yet."""
+        self.check(issues)
         score = self.get_score(issues)
-        badge = self.get_badge(score)
-        
         return {
-            'result': self.result.value,
-            'score': score,
-            'badge': badge,
-            'details': self.details,
-            'issue_counts': {
-                'critical': sum(1 for i in issues if i.severity == Severity.CRITICAL),
-                'high': sum(1 for i in issues if i.severity == Severity.HIGH),
-                'warning': sum(1 for i in issues if i.severity == Severity.WARNING),
-                'info': sum(1 for i in issues if i.severity == Severity.INFO),
+            "result": self.result.value,
+            "score": score,
+            "badge": self.get_badge(score),
+            "details": self.details,
+            "issue_counts": {
+                "critical": sum(1 for issue in issues if issue.severity == Severity.CRITICAL),
+                "high": sum(1 for issue in issues if issue.severity == Severity.HIGH),
+                "warning": sum(1 for issue in issues if issue.severity == Severity.WARNING),
+                "info": sum(1 for issue in issues if issue.severity == Severity.INFO),
             },
         }

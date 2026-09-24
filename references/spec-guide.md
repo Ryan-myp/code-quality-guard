@@ -1,56 +1,44 @@
-# 规范定义指南
+# Project Spec
 
-## 什么是规范（Spec）？
-
-规范是项目质量标准的定义文件，告诉 Code Quality Guard 如何检查代码。
-
-## 规范格式
+The project spec controls the checks performed by the current Python scanner. Unknown keys are rejected so a typo cannot silently disable a policy.
 
 ```yaml
-# spec.yaml
 name: my-project
 language: python
 
 security:
-  max_severity: critical  # 只报告 critical 及以上
+  max_severity: info
   ignore_patterns:
-    - "test_*.py"         # 测试文件不检查
-    - "__init__.py"       # 包初始化文件忽略
-  allowed_eval_contexts:
-    - "ast.literal_eval"  # 允许的 eval 替代方案
+    - "test_*.py"
+    - "__init__.py"
+    - "conftest.py"
 
 code_quality:
-  max_function_length: 50      # 函数最大行数
-  max_nesting_depth: 4         # 最大嵌套深度
-  max_parameters: 7            # 最大参数数量
-  max_line_length: 100         # 最大行长度
-  require_docstrings: true     # 是否要求文档字符串
-  max_todo_age_days: 30        # TODO 最长保留天数
+  max_function_length: 50
+  max_nesting_depth: 4
+  max_parameters: 7
+  max_line_length: 100
+  require_docstrings: false
 
-feedback:
-  enable_learning: true        # 启用反馈学习
-  min_confidence: 0.7          # 最低置信度
+quality_gate:
+  max_critical: 0
+  max_high: 5
+  max_warning: 20
+  max_info: 100
+  min_confidence: 0.7
+  forbidden_rules: []
 ```
 
-## 自动推断
+`security.max_severity` is the minimum severity to report: `critical` reports only critical security findings, while `info` reports all security findings. Ignore patterns skip whole files and match their path relative to the scan root or their basename.
 
-如果不需要自定义规范，可以运行：
+The code-quality limits count physical source lines for function length, count explicit parameters (excluding `self` or `cls` on methods), and count nested control-flow blocks. Docstring checks apply to public functions and classes when enabled. TODO comments are informational; TODO age is not inferred.
+
+`quality_gate` values determine pass, warning, and failure thresholds. Any scan error, invalid Python syntax, or scan with no eligible Python files fails closed. A gate warning returns exit code `1`; a failed gate or scan error returns `2`.
+
+Generate a starter file with:
 
 ```bash
-python scripts/qguard.py . --spec-only
+qguard . --spec-only --output qguard.yaml
 ```
 
-会根据项目结构自动生成默认规范。
-
-## 规范层级
-
-1. **项目级** (`spec.yaml`): 项目整体规范
-2. **模块级** (`modules/*/spec.yaml`): 特定模块的规范
-3. **文件级** (文件头部注释): 单个文件的特殊规范
-
-## 最佳实践
-
-1. **从严格开始**：先用默认规范，根据反馈调整
-2. **逐步放宽**：不要一次性禁用所有规则
-3. **团队共识**：规范应该经过团队讨论
-4. **定期审查**：每季度回顾一次规范有效性
+The current scanner supports Python only. `language` is retained as explicit project metadata; selecting another language does not enable parsing for it.

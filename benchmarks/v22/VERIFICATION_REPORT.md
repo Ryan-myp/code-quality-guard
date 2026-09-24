@@ -1,104 +1,30 @@
-# code-quality-guard v22 验证报告
+# Annotated Benchmark Report
 
-## 执行摘要
+**Evaluation date:** September 24, 2026
+**Command:** `python scripts/evaluate_benchmark.py`
 
-| 指标 | 数值 | 目标 | 状态 |
-|------|------|------|------|
-| 样本数量 | 6,614 | 100+ | ✅ 超额完成 |
-| 测试通过 | 14/14 | 100% | ✅ 通过 |
-| 精确率 | 100% | ≥80% | ✅ 通过 |
-| 召回率 | 66.7% | ≥65% | ✅ 通过 |
-| F1 Score | 0.80 | ≥0.70 | ✅ 通过 |
+## Scope
 
----
+The evaluator runs the current analyzer against `annotated_samples.json`. The evaluation unit is the unique set of expected and detected rule IDs per sample; multiple occurrences of one rule in the same sample count once. This is a five-sample smoke benchmark, not a representative estimate of production behavior.
 
-## 真实样本验证结果
+## Results
 
-### 检测样本来源
-- **GitHub仓库**: 25个知名Python项目
-- **项目名称**: Flask, Django, FastAPI, SQLAlchemy, Click, Requests, Poetry, Boto3, Pydantic, Uvicorn 等
-- **总样本数**: 6,614个Python文件
+| Measure | Result |
+|---|---:|
+| Annotated samples | 5 |
+| True positives | 7 |
+| False positives | 0 |
+| False negatives | 0 |
+| Precision | 1.000 |
+| Recall | 1.000 |
+| F1 | 1.000 |
 
-### 抽样验证（100个样本）
+The 6,614 collected snippets in `real_samples/collected_samples.json` have no ground-truth annotations. They are not evaluated here and cannot support precision, recall, or F1 claims.
 
-| 检测结果 | 数量 | 说明 |
-|---------|------|------|
-| 真正例 (TP) | 2 | eval/exec、硬编码密码 |
-| 假正例 (FP) | 0 | 无误报 |
-| 假负例 (FN) | 1 | 1个已知问题未检测到 |
+## Reproduce
 
-### 检测到的真实问题
-
-#### 1. exec() 使用（sqlalchemy/test/conftest.py:58）
-```python
-code = compile(f.read(), "bootstrap.py", "exec")
-exec(code, globals(), locals())
+```bash
+python scripts/evaluate_benchmark.py
 ```
-**严重程度**: 中  
-**建议**: 测试代码中使用 exec 需谨慎，考虑使用更安全的方式
 
-#### 2. 硬编码密码（flask/examples/tutorial/tests/conftest.py:51）
-```python
-def login(self, username="test", password="test"):
-```
-**严重程度**: 低  
-**说明**: 测试代码中的默认凭据，非生产环境风险
-
----
-
-## 质量门禁评估
-
-### QualityGate 评分
-
-| 维度 | 权重 | 得分 | 加权得分 |
-|------|------|------|---------|
-| 精确率 | 40% | 1.00 | 0.40 |
-| 召回率 | 40% | 0.667 | 0.267 |
-| F1 Score | 20% | 0.80 | 0.16 |
-| **总计** | 100% | - | **0.827** |
-
-**QualityGate 阈值**: 0.70  
-**实际得分**: 0.827  
-**结果**: ✅ 通过，Badge 等级 A
-
----
-
-## 改进建议
-
-### 1. 规则优化
-- [x] 消除 `password=` 在赋值上下文中的误报
-- [x] 提高 `eval()`/`exec()` 检测精确度
-- [ ] 增加对测试代码的排除逻辑
-
-### 2. 样本扩充
-- [ ] 收集更多生产代码样本（非测试代码）
-- [ ] 增加不同安全漏洞类型的样本
-- [ ] 添加 Edge Case 样本
-
-### 3. 误报分析
-当前检测到的2个问题：
-1. `exec()` 在测试配置文件中 - 可接受
-2. 硬编码密码在测试代码中 - 低风险
-
-**结论**: 当前精确率100%，无严重误报
-
----
-
-## 结论
-
-code-quality-guard v22 在真实项目样本上表现良好：
-- ✅ 精确率 100%（零误报）
-- ✅ 召回率 66.7%（覆盖主要安全问题）
-- ✅ F1 Score 0.80（达到目标）
-- ✅ QualityGate 0.827（通过门禁）
-
-**下一步**:
-1. 持续收集更多真实样本
-2. 优化召回率（当前66.7% → 目标80%）
-3. 集成到 CI/CD 流程进行实际验证
-
----
-
-*报告生成时间*: 2025-09-23  
-*版本*: v22.0.0-alpha  
-*验证状态*: ✅ 通过
+The command rewrites `metrics_result.json` with per-sample expected, detected, matched, false-positive, and false-negative rule IDs.

@@ -1,185 +1,36 @@
-# code-quality-guard v22.1 优化完成报告
+# Code Quality Guard Hardening Report
 
-## 执行摘要
+**Updated:** September 24, 2026
+**Version:** 22.1.0a1
 
-| 指标 | 数值 | 目标 | 状态 |
-|------|------|------|------|
-| 样本数量 | 6,614 | 100+ | ✅ 超额完成 |
-| 测试通过 | 14/14 | 100% | ✅ 通过 |
-| 精确率 | 100% | ≥80% | ✅ 通过 |
-| 召回率 | 66.7% | ≥65% | ✅ 通过 |
-| F1 Score | 0.80 | ≥0.70 | ✅ 通过 |
-| 安全规则覆盖率 | 11/11 | 100% | ✅ 通过 |
+This report replaces earlier performance claims that were not reproducible from the checked-in annotations. Code Quality Guard remains an alpha, heuristic Python scanner.
 
----
+## Changes
 
-## v22.1 新增安全规则
+- Replaced raw line-regex analysis with AST checks for Python code and tokenizer-based TODO comment detection.
+- Corrected physical function-line and full parameter counts; added configurable line-length and public-definition docstring checks.
+- Limited scanning to `.py`, added single-file support, file ignore patterns, clear unsupported-language errors, and fail-closed handling for read, decoding, syntax, and empty-scan errors.
+- Aggregated findings across all files and applied every configured quality-gate limit, including informational findings.
+- Added validation for specs and gate settings. Unsupported settings now produce an error rather than appearing to work.
+- Implemented SARIF 2.1.0 and Agent guidance exports.
+- Made the YAML rule catalog the runtime metadata source and included it in package builds.
+- Corrected package metadata, the console entry point, runtime dependency declaration, and pytest import behavior.
+- Replaced unverified benchmark claims with a repeatable evaluator over the five checked-in annotated examples.
 
-### 1. exec() 检测
-- **规则ID**: `security.exec`
-- **严重程度**: CRITICAL
-- **模式**: `\bexec\s*\(`
-- **置信度**: 0.95
-- **修复建议**: 重构代码避免使用 exec()
+The self-check `python3 scripts/qguard.py gate . --min-score 70` passes at 100/100 with no findings.
 
-### 2. 不安全反序列化检测
-- **规则ID**: `security.unsafe_deserialization`
-- **严重程度**: CRITICAL
-- **模式**: `yaml\.load.*Loader\s*=|pickle\.loads?\s*\(|marshal\.loads?\s*\(`
-- **置信度**: 0.90
-- **修复建议**: 使用安全的反序列化方法，如 yaml.safe_load()
+## Measured Evidence
 
-### 3. 不安全随机数检测
-- **规则ID**: `security.insecure_random`
-- **严重程度**: WARNING
-- **模式**: `random\.random\s*\(|random\.randint\s*\(|random\.choice\s*\(`
-- **置信度**: 0.85
-- **修复建议**: 使用 secrets 模块生成安全随机数
+The current annotated benchmark reports precision `1.000`, recall `1.000`, and F1 `1.000` over five samples. It contains seven matched rule/sample pairs, zero unmatched detections, and zero false negatives. This five-sample smoke benchmark is not evidence of broad or production recall.
 
----
+The 6,614 collected source snippets have no labels and are not benchmark outcomes. Earlier reports that described this corpus as a validated, sampled, or zero-false-positive benchmark have been withdrawn.
 
-## 规则统计
+## Known Limits
 
-| 类别 | 规则数量 | 说明 |
-|------|---------|------|
-| 安全规则 | 10 | eval/exec、硬编码密钥、SQL注入、SSL禁用、命令注入、反序列化、路径遍历、随机数 |
-| 错误处理规则 | 3 | 裸except、异常吞没、通用异常 |
-| 代码质量规则 | 3 | 函数过长、参数过多、嵌套过深 |
-| 信息提示 | 1 | TODO/FIXME |
-| **总计** | **17** | - |
+- Python only; no TypeScript, JavaScript, Go, or Rust parser is bundled.
+- The checks are syntax-based heuristics, not data-flow analysis or proof of exploitability.
+- Path traversal detection is limited to literal parent-directory components.
+- The five labeled examples are too few and too narrow to estimate real-world accuracy.
+- Feedback is stored locally; it does not automatically tune rules or train a model.
 
----
-
-## 真实样本验证结果
-
-### 检测样本来源
-- **GitHub仓库**: 25个知名Python项目
-- **项目名称**: Flask, Django, FastAPI, SQLAlchemy, Click, Requests, Poetry, Boto3, Pydantic, Uvicorn 等
-- **总样本数**: 6,614个Python文件
-
-### 抽样验证（100个样本）
-
-| 检测结果 | 数量 | 说明 |
-|---------|------|------|
-| 真正例 (TP) | 2 | eval/exec、硬编码密码 |
-| 假正例 (FP) | 0 | 无误报 |
-| 假负例 (FN) | 1 | 1个已知问题未检测到 |
-
-### 检测到的真实问题
-
-#### 1. exec() 使用（sqlalchemy/test/conftest.py:58）
-```python
-code = compile(f.read(), "bootstrap.py", "exec")
-exec(code, globals(), locals())
-```
-**严重程度**: 中  
-**建议**: 测试代码中使用 exec 需谨慎，考虑使用更安全的方式
-
-#### 2. 硬编码密码（flask/examples/tutorial/tests/conftest.py:51）
-```python
-def login(self, username="test", password="test"):
-```
-**严重程度**: 低  
-**说明**: 测试代码中的默认凭据，非生产环境风险
-
----
-
-## 质量门禁评估
-
-### QualityGate 评分
-
-| 维度 | 权重 | 得分 | 加权得分 |
-|------|------|------|---------|
-| 精确率 | 40% | 1.00 | 0.40 |
-| 召回率 | 40% | 0.667 | 0.267 |
-| F1 Score | 20% | 0.80 | 0.16 |
-| **总计** | 100% | - | **0.827** |
-
-**QualityGate 阈值**: 0.70  
-**实际得分**: 0.827  
-**结果**: ✅ 通过，Badge 等级 A
-
----
-
-## 安全规则覆盖测试
-
-| 规则 | 状态 | 说明 |
-|------|------|------|
-| eval() | ✅ 检测 | 代码注入风险 |
-| exec() | ✅ 检测 | 代码注入风险 |
-| 硬编码密码 | ✅ 检测 | 密钥泄露风险 |
-| SSL禁用 | ✅ 检测 | 中间人攻击风险 |
-| SQL注入 | ✅ 检测 | 数据泄露风险 |
-| 命令注入 | ✅ 检测 | 命令执行风险 |
-| 不安全反序列化 | ✅ 检测 | 代码执行风险 |
-| 不安全随机数 | ✅ 检测 | 安全漏洞风险 |
-| 裸except | ✅ 检测 | 错误处理不当 |
-| 异常吞没 | ✅ 检测 | 调试困难 |
-
-**安全规则覆盖率**: 10/10 = 100%
-
----
-
-## 改进成果
-
-### v22.1 新增规则
-- ✅ exec() 检测（从 eval 分离）
-- ✅ 不安全反序列化检测（yaml.load/pickle.loads/marshal.loads）
-- ✅ 不安全随机数检测（random模块）
-- ✅ 路径遍历检测（open() with user input）
-
-### 规则优化
-- ✅ exec() 和 eval() 分开检测，提高精确度
-- ✅ 不安全反序列化规则覆盖更多模式
-- ✅ 添加置信度评分
-
----
-
-## 核心定位重申
-
-> **code-quality-guard 的目的是帮助 AI 写出好的代码、正确的代码，而非阻止 AI 写代码。**
-
-### 设计理念
-1. **事前预防**: 在代码编写阶段提供指导
-2. **修复建议**: 每个问题都有具体的修复方案
-3. **数据驱动**: 基于真实样本验证效果
-4. **持续学习**: 反馈收集 + 规则调优
-
----
-
-## 下一步计划
-
-### 短期（本周）
-- [ ] 收集更多生产代码样本（非测试代码）
-- [ ] 增加对测试代码的排除逻辑
-- [ ] 添加 edge case 样本
-
-### 中期（本月）
-- [ ] 优化召回率（当前66.7% → 目标80%）
-- [ ] 集成到 CI/CD 流程进行实际验证
-- [ ] 收集用户反馈并持续优化
-
-### 长期
-- [ ] 建立反馈学习系统
-- [ ] 支持更多语言
-- [ ] 与 LLM 集成进行智能修复建议
-
----
-
-## 结论
-
-code-quality-guard v22.1 在真实项目样本上表现良好：
-- ✅ 精确率 100%（零误报）
-- ✅ 召回率 66.7%（覆盖主要安全问题）
-- ✅ F1 Score 0.80（达到目标）
-- ✅ QualityGate 0.827（通过门禁）
-- ✅ 安全规则覆盖率 100%
-
-**核心使命**: 指导 AI 写出好的代码、正确的代码。
-
----
-
-*报告生成时间*: 2025-09-23  
-*版本*: v22.1.0  
-*验证状态*: ✅ 通过  
-*下一步*: 持续优化召回率
+See [README](README.md), [rule notes](references/rules.md), and the [reproducible benchmark report](benchmarks/v22/VERIFICATION_REPORT.md).
