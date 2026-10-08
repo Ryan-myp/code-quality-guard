@@ -67,3 +67,27 @@ def test_non_string_mapping_key_is_reported_as_invalid_spec(tmp_path):
 
     with pytest.raises(ValueError, match="keys must be strings"):
         SpecParser().load(path)
+
+
+def test_auto_generate_detects_python_sources_in_nested_packages(tmp_path):
+    (tmp_path / "go.mod").write_text(
+        "module example.com/mixed\n\ngo 1.20\n",
+        encoding="utf-8",
+    )
+    source = tmp_path / "src" / "service"
+    source.mkdir(parents=True)
+    (source / "service.py").write_text("value = 1\n", encoding="utf-8")
+
+    assert SpecParser().auto_generate(tmp_path).language == "mixed"
+
+
+def test_auto_generate_ignores_python_sources_in_virtual_environments(tmp_path):
+    (tmp_path / "go.mod").write_text(
+        "module example.com/go-only\n\ngo 1.20\n",
+        encoding="utf-8",
+    )
+    vendored = tmp_path / ".venv" / "lib" / "python3.12" / "site-packages"
+    vendored.mkdir(parents=True)
+    (vendored / "dependency.py").write_text("value = 1\n", encoding="utf-8")
+
+    assert SpecParser().auto_generate(tmp_path).language == "go"

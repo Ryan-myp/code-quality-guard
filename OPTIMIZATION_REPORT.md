@@ -1,9 +1,9 @@
 # Code Quality Guard Hardening Report
 
-**Updated:** September 24, 2026
-**Version:** 22.1.0a1
+**Updated:** October 8, 2026
+**Version:** 22.2.0a2
 
-This report replaces earlier performance claims that were not reproducible from the checked-in annotations. Code Quality Guard remains an alpha, heuristic Python scanner.
+This report replaces earlier performance claims that were not reproducible from the checked-in annotations. Code Quality Guard remains an alpha, heuristic Python and Go scanner.
 
 ## Changes
 
@@ -15,22 +15,25 @@ This report replaces earlier performance claims that were not reproducible from 
 - Implemented SARIF 2.1.0 and Agent guidance exports.
 - Made the YAML rule catalog the runtime metadata source and included it in package builds.
 - Corrected package metadata, the console entry point, runtime dependency declaration, and pytest import behavior.
-- Replaced unverified benchmark claims with a repeatable evaluator over the five checked-in annotated examples.
+- Added Go `gofmt` and `go vet` checks, mixed Python/Go scanning, and opt-in execution of `pytest` and `go test`.
+- Added a three-checkpoint technical-design fidelity workflow and a human-rated protocol for evaluating its effect on agent behavior.
+- Expanded the scanner's annotated smoke benchmark from five to thirteen positive and negative-control examples.
 
-The self-check `python3 scripts/qguard.py gate . --min-score 70` passes at 100/100 with no findings.
+The latest self-check `python3 scripts/qguard.py gate . --min-score 70` passed at 100.0/100 with no findings on October 8, 2026.
 
 ## Measured Evidence
 
-The current annotated benchmark reports precision `1.000`, recall `1.000`, and F1 `1.000` over five samples. It contains seven matched rule/sample pairs, zero unmatched detections, and zero false negatives. This five-sample smoke benchmark is not evidence of broad or production recall.
+The current annotated benchmark reports precision `1.000`, recall `1.000`, and F1 `1.000` over thirteen samples, including negative controls. This small smoke benchmark is not evidence of broad or production recall. It evaluates the Python scanner only, not coding-agent behavior.
 
 The 6,614 collected source snippets have no labels and are not benchmark outcomes. Earlier reports that described this corpus as a validated, sampled, or zero-false-positive benchmark have been withdrawn.
 
 ## Known Limits
 
-- Python only; no TypeScript, JavaScript, Go, or Rust parser is bundled.
+- Python and Go checks are supported, including mixed projects. No TypeScript, JavaScript, or Rust analyzer is bundled.
 - The checks are syntax-based heuristics, not data-flow analysis or proof of exploitability.
 - Path traversal detection is limited to literal parent-directory components.
-- The five labeled examples are too few and too narrow to estimate real-world accuracy.
+- The thirteen labeled examples are too few and too narrow to estimate real-world accuracy.
 - Feedback is stored locally; it does not automatically tune rules or train a model.
+- The implementation-fidelity benchmark is a review protocol; no model behavior results are claimed until paired runs are scored.
 
 See [README](README.md), [rule notes](references/rules.md), and the [reproducible benchmark report](benchmarks/v22/VERIFICATION_REPORT.md).

@@ -2,7 +2,7 @@
 name: code-quality-guard
 description: Use when implementing, refactoring, or reviewing code, especially when work must follow a technical design, preserve intended extension points, and be verified with tests and explicit quality checks.
 metadata:
-  version: "22.2.0a1"
+  version: "22.2.0a2"
 ---
 
 # Code Quality Guard
@@ -22,13 +22,15 @@ For review-only requests, do not edit files. Lead with actionable defects and ri
 
 ## Technical-Design Fidelity
 
-Before coding from a design, briefly map each material requirement to its target layer or interface, intended extension point, and acceptance test. Separate explicit constraints from examples or preferences. For substantial changes, show this implementation map and surface assumptions before editing; ask for clarification only when an unresolved choice could materially change interfaces, data ownership, or the extension mechanism. Otherwise state a conservative assumption and proceed.
+For substantial work driven by a design, use three checkpoints so architectural drift is caught before most of the feature is built:
 
-When the design calls for extensibility, identify what is expected to vary and where a new implementation should plug in. Add a contract-level test for that boundary where practical, such as exercising a second implementation without changing core orchestration. Use the repository's established pattern; do not introduce registries, strategies, or plugin systems for hypothetical variation the design does not require.
+1. **Before broad implementation:** map each material requirement to its owning layer or interface, intended extension point, and acceptance test. Separate requirements from examples, preferences, and non-goals. Surface material assumptions. Ask only when an unresolved choice could change behavior, interfaces, data ownership, or the extension mechanism; otherwise state a conservative assumption and proceed.
+2. **After the first representative path:** compare the code and tests with that map before repeating the implementation pattern across the feature. Resolve a mismatch or design conflict now; do not defer it to final refactoring.
+3. **Before completion:** trace each material requirement to changed code and test evidence. Identify deviations and their reasons. Passing tests alone do not establish architectural fidelity.
 
-Review hard-coded values and branching against the design rather than banning them categorically. Keep stable domain invariants simple; centralize values that vary by environment, customer, or policy, and never hard-code credentials. A small `if`/`else` for a stable finite choice can be appropriate; it is a design mismatch when each new supported variant must add another branch to core flow despite a specified extension point.
+When extensibility is required, name what varies and where another implementation plugs in. Prefer an existing contract and a test that exercises more than one implementation without changing core orchestration. Do not replace a specified extension point with a growing branch in the main flow. Conversely, keep stable, closed choices simple; do not add a registry, strategy, or plugin layer for hypothetical variation.
 
-Compare the changed files and tests with the implementation map during substantial work and again before completion. Report requirement coverage with concrete code or test evidence, and call out any deviation with its reason. Do not silently replace an architectural requirement with a simpler implementation just because its tests pass.
+Review new literals and branches against the requirements, not as blanket style violations. Keep stable domain invariants local. Move values that vary by environment, customer, deployment, or policy to the owning configuration or policy layer, with validation and tests for defaults and invalid values. Never hard-code credentials. For substantial work, use the checklist in [references/implementation-fidelity.md](references/implementation-fidelity.md).
 
 ## Quality Review
 
@@ -50,11 +52,11 @@ python3 "$SKILL_DIR/scripts/qguard.py" /path/to/project --verbose
 python3 "$SKILL_DIR/scripts/qguard.py" gate /path/to/project --min-score 70
 ```
 
-The Python analyzer checks `.py` files with AST and tokenizer rules; it does not perform interprocedural data-flow analysis or prove exploitability. The Go analyzer requires a module-root `go.mod` and Go tools on `PATH`; it runs `gofmt` and `go vet -json ./...`. It does not run `go test`, `govulncheck`, or a custom Go AST/data-flow analysis. Invalid source, unavailable tools, unreadable files, and scans with no eligible source files fail closed. Review findings and run the target project's tests and other relevant tools; do not use this scanner as the sole security or CI gate.
+The Python analyzer checks `.py` files with AST and tokenizer rules; it does not perform interprocedural data-flow analysis or prove exploitability. The Go analyzer requires a module-root `go.mod` and Go tools on `PATH`; it runs `gofmt` and `go vet -json ./...`. Go formatting and vet findings block the gate. Project tests are opt-in with `--run-tests`; this runs `python -m pytest` and/or `go test ./...` with a 300-second timeout per language. Invalid source, unavailable tools, unreadable files, test failures, and scans with no eligible source files fail closed. Review findings and run other relevant project tools; do not use this scanner as the sole security or CI gate.
 
 Use `--config` for a checked-in project spec. `--spec-only` writes a starter spec; choose an explicit output path before running it. `--sarif` exports SARIF 2.1.0 and `--agent-rules` exports scan-specific guidance YAML.
 
-For Go implementation and validation details, consult [references/go.md](references/go.md). For scanner rule semantics or configuration, consult [references/rules.md](references/rules.md) and [references/spec-guide.md](references/spec-guide.md). Use [references/best-practices.md](references/best-practices.md) for concise implementation guidance. Feedback is local storage only; see [references/feedback.md](references/feedback.md) when the task concerns feedback records.
+For Go implementation and validation details, consult [references/go.md](references/go.md). For scanner rule semantics or configuration, consult [references/rules.md](references/rules.md) and [references/spec-guide.md](references/spec-guide.md). Use [references/best-practices.md](references/best-practices.md) for concise implementation guidance. Feedback is local storage only; see [references/feedback.md](references/feedback.md) when the task concerns feedback records. The scanner benchmark and the human-rated implementation-fidelity benchmark measure different things; see [benchmarks/implementation-fidelity/README.md](benchmarks/implementation-fidelity/README.md) before making claims about agent behavior.
 
 To run the bundled checks:
 

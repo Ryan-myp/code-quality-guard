@@ -3,8 +3,10 @@
 import argparse
 import json
 import math
+import shutil
+import subprocess
 import sys
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -36,6 +38,19 @@ EXCLUDED_DIRECTORIES = {
     ".idea",
     ".tox",
 }
+
+TEST_TIMEOUT_SECONDS = 300
+
+
+@dataclass
+class ScanAnalysis:
+    """Language-neutral scan results used to combine analyzer outputs."""
+
+    files: List[Path]
+    file_results: Dict[str, List[Dict[str, Any]]]
+    issues: List[Issue]
+    scan_errors: List[Dict[str, str]]
+    fail_on_any_rules: List[str]
 
 
 def discover_files(project_path: Path, extensions: Optional[List[str]] = None) -> List[Path]:
@@ -201,17 +216,18 @@ def _run_python_analysis(project_path: Path, spec: ProjectSpec):
     files, file_results, issues, scan_errors, analyzer = _scan_files(
         project_path, spec
     )
-    return (
+    del analyzer
+    return ScanAnalysis(
         files,
         file_results,
         issues,
         scan_errors,
-        analyzer.get_summary(issues),
         [],
     )
 
 
-def _run_go_analysis(project_path: Path):
+def _run_go_analysis(project_path: Path, spec: ProjectSpec):
+    del spec
     files = discover_files(project_path, extensions=[".go"])
     go_result = GoAnalyzer().analyze(project_path, files)
     file_results = {
@@ -223,67 +239,182 @@ def _run_go_analysis(project_path: Path):
         for file_issues in go_result.file_results.values()
         for issue in file_issues
     ]
-    return (
+    return ScanAnalysis(
         files,
         file_results,
         issues,
         go_result.scan_errors,
-        _summarize_issues(issues),
-        ["go.vet"],
+        ["go.gofmt", "go.vet"],
     )
+
+
+LANGUAGE_ANALYZERS = {
+    "python": _run_python_analysis,
+    "go": _run_go_analysis,
+}
+
+
+def _combine_analyses(analyses: List[ScanAnalysis]) -> ScanAnalysis:
+    combined = ScanAnalysis([], {}, [], [], [])
+    for analysis in analyses:
+        combined.files.extend(analysis.files)
+        combined.file_results.update(analysis.file_results)
+        combined.issues.extend(analysis.issues)
+        combined.scan_errors.extend(analysis.scan_errors)
+        for rule_id in analysis.fail_on_any_rules:
+            if rule_id not in combined.fail_on_any_rules:
+                combined.fail_on_any_rules.append(rule_id)
+    return combined
+
+
+def _test_command(language: str):
+    if language == "python":
+        return (
+            [sys.executable, "-m", "pytest"],
+            [Path(sys.executable).name, "-m", "pytest"],
+            None,
+        )
+
+    executable = shutil.which("go")
+    return (
+        [executable or "go", "test", "./..."],
+        ["go", "test", "./..."],
+        "Go command is not available on PATH." if executable is None else None,
+    )
+
+
+def _run_single_test(
+    project_root: Path, language: str
+) -> Dict[str, Any]:
+    command, display_command, executable_error = _test_command(language)
+    result = {
+        "language": language,
+        "command": display_command,
+        "status": "error",
+        "exit_code": None,
+    }
+    if executable_error:
+        result["reason"] = executable_error
+        return result
+
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=str(project_root),
+            timeout=TEST_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        result["status"] = "timeout"
+        result["reason"] = "Timed out after {} seconds.".format(
+            TEST_TIMEOUT_SECONDS
+        )
+    except OSError as error:
+        result["reason"] = "{} while starting test command.".format(
+            type(error).__name__
+        )
+    else:
+        result["exit_code"] = completed.returncode
+        result["status"] = "passed" if completed.returncode == 0 else "failed"
+    return result
+
+
+def _run_project_tests(
+    project_path: Path, languages: List[str]
+) -> List[Dict[str, Any]]:
+    project_root = project_path if project_path.is_dir() else project_path.parent
+    return [
+        _run_single_test(project_root, language)
+        for language in languages
+    ]
 
 
 def _build_analysis_report(
     project_path: Path,
     language: str,
     spec: ProjectSpec,
-    analysis,
+    analysis: ScanAnalysis,
     min_score: Optional[float],
+    tests_requested: bool,
+    test_results: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    files, file_results, issues, scan_errors, summary, fail_rules = analysis
     gate, gate_result, quality_score = _evaluate_gate(
-        spec, issues, scan_errors, min_score, fail_on_any_rules=fail_rules
+        spec,
+        analysis.issues,
+        analysis.scan_errors,
+        min_score,
+        fail_on_any_rules=analysis.fail_on_any_rules,
     )
+    gate_result = _apply_test_results(gate, gate_result, test_results)
+    summary = _summarize_issues(analysis.issues)
     suggestions = FixSuggester().prioritize(
-        FixSuggester().suggest_batch(issues)
+        FixSuggester().suggest_batch(analysis.issues)
     )
     return {
         "project": str(project_path),
         "language": language,
-        "files_found": len(files),
-        "files_scanned": len(file_results),
-        "files_with_issues": sum(bool(items) for items in file_results.values()),
-        "total_issues": len(issues),
+        "files_found": len(analysis.files),
+        "files_scanned": len(analysis.file_results),
+        "files_with_issues": sum(
+            bool(items) for items in analysis.file_results.values()
+        ),
+        "total_issues": len(analysis.issues),
         "gate_result": gate_result.value,
         "gate_details": gate.details,
         "quality_score": quality_score,
         "quality_badge": gate.get_badge(quality_score),
         "issues_by_severity": summary["by_severity"],
-        "file_results": file_results,
-        "scan_errors": scan_errors,
+        "file_results": analysis.file_results,
+        "scan_errors": analysis.scan_errors,
         "suggestions": suggestions,
         "summary": summary,
+        "verification": {
+            "tests_requested": tests_requested,
+            "tests": test_results,
+        },
     }
 
 
-def run_analysis(
-    project_path: Path,
-    spec: ProjectSpec,
-    verbose: bool = False,
-    min_score: Optional[float] = None,
-) -> Dict[str, Any]:
-    """Scan a Python project or a Go module and fail closed on scan errors."""
-    project_path = Path(project_path)
+def _apply_test_results(gate, gate_result, test_results):
+    failed_tests = [
+        result for result in test_results if result["status"] != "passed"
+    ]
+    if not failed_tests:
+        return gate_result
+    gate.fail(
+        "project_tests_failed",
+        tests=failed_tests,
+        prior_gate_result=gate_result.value,
+        prior_gate_details=dict(gate.details),
+    )
+    return gate.result
+
+
+def _languages_for_spec(spec: ProjectSpec) -> List[str]:
+    language_groups = {
+        "python": ["python"],
+        "py": ["python"],
+        "go": ["go"],
+        "golang": ["go"],
+        "mixed": ["python", "go"],
+    }
+    languages = language_groups.get(spec.language.lower())
+    if languages is None:
+        raise ValueError(
+            "Unsupported language '{}': the analyzer supports Python and Go, "
+            "including mixed projects.".format(spec.language)
+        )
+    return languages
+
+
+def _validate_analysis_options(
+    spec: ProjectSpec, min_score: Optional[float], run_tests: bool
+) -> List[str]:
     validation_errors = spec.validate()
     if validation_errors:
         raise ValueError("Invalid project spec: {}".format("; ".join(validation_errors)))
-    language = spec.language.lower()
-    if language not in ("python", "py", "go", "golang"):
-        raise ValueError(
-            "Unsupported language '{}': the analyzer currently supports Python and Go.".format(
-                spec.language
-            )
-        )
+    if not isinstance(run_tests, bool):
+        raise ValueError("run_tests must be a boolean")
     if min_score is not None and (
         isinstance(min_score, bool)
         or not isinstance(min_score, (int, float))
@@ -291,14 +422,38 @@ def run_analysis(
         or not 0 <= min_score <= 100
     ):
         raise ValueError("min_score must be a finite number from 0 to 100")
-    if language in ("python", "py"):
-        language = "python"
-        analysis = _run_python_analysis(project_path, spec)
-    else:
-        language = "go"
-        analysis = _run_go_analysis(project_path)
+    return _languages_for_spec(spec)
+
+
+def run_analysis(
+    project_path: Path,
+    spec: ProjectSpec,
+    verbose: bool = False,
+    min_score: Optional[float] = None,
+    run_tests: bool = False,
+) -> Dict[str, Any]:
+    """Scan supported project languages and optionally execute their test suites."""
+    project_path = Path(project_path)
+    languages = _validate_analysis_options(spec, min_score, run_tests)
+    analysis = _combine_analyses(
+        [
+            LANGUAGE_ANALYZERS[language](project_path, spec)
+            for language in languages
+        ]
+    )
+    test_results = (
+        _run_project_tests(project_path, languages) if run_tests else []
+    )
     return _build_analysis_report(
-        project_path, language, spec, analysis, min_score
+        project_path,
+        spec.language.lower()
+        if spec.language.lower() == "mixed"
+        else languages[0],
+        spec,
+        analysis,
+        min_score,
+        run_tests,
+        test_results,
     )
 
 
@@ -321,10 +476,15 @@ def _argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "path",
-        help="Python project, Go module root, or Python source file",
+        help="Python/Go project directory or Python source file",
     )
     parser.add_argument("--verbose", "-v", action="store_true", help="List scanned files")
     parser.add_argument("--spec-only", action="store_true", help="Generate a project spec")
+    parser.add_argument(
+        "--run-tests",
+        action="store_true",
+        help="Run the detected project's pytest and/or go test suite",
+    )
     exports = parser.add_mutually_exclusive_group()
     exports.add_argument("--agent-rules", action="store_true", help="Generate agent guidance YAML")
     exports.add_argument("--sarif", action="store_true", help="Generate a SARIF 2.1.0 report")
@@ -363,6 +523,15 @@ def _finish_scan(args: argparse.Namespace, project_path: Path, result: Dict[str,
     if args.verbose:
         for file_name in result["file_results"]:
             print("已扫描: {}".format(file_name))
+    for check in result.get("verification", {}).get("tests", []):
+        command = " ".join(check["command"])
+        print(
+            "测试验证 ({}): {} [{}]".format(
+                check["language"], check["status"].upper(), command
+            )
+        )
+        if check.get("reason"):
+            print("测试说明: {}".format(check["reason"]))
     for error in result["scan_errors"]:
         print(
             "扫描失败: {}: {}".format(error["path"], error["error"]),
@@ -410,6 +579,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.spec_only and (args.agent_rules or args.sarif):
         print("错误: --spec-only 不能与导出选项同时使用", file=sys.stderr)
         return 2
+    if args.spec_only and args.run_tests:
+        print("错误: --spec-only 不能与 --run-tests 同时使用", file=sys.stderr)
+        return 2
 
     try:
         spec = _load_spec(project_path, args.config)
@@ -420,6 +592,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             spec,
             verbose=args.verbose,
             min_score=args.min_score,
+            run_tests=args.run_tests,
         )
     except (OSError, ValueError, yaml.YAMLError) as error:
         print("错误: {}".format(error), file=sys.stderr)

@@ -1,7 +1,7 @@
 {
   "evaluation_unit": "unique rule IDs per annotated sample",
-  "annotated_samples": 5,
-  "true_positives": 7,
+  "annotated_samples": 13,
+  "true_positives": 11,
   "false_positives": 0,
   "false_negatives": 0,
   "precision": 1.0,
@@ -81,6 +81,94 @@
       "matched": [
         "code_quality.function_too_long"
       ],
+      "false_positives": [],
+      "false_negatives": []
+    },
+    {
+      "id": "sample_006",
+      "expected": [
+        "security.command_injection"
+      ],
+      "detected": [
+        "security.command_injection"
+      ],
+      "matched": [
+        "security.command_injection"
+      ],
+      "false_positives": [],
+      "false_negatives": []
+    },
+    {
+      "id": "sample_007",
+      "expected": [],
+      "detected": [],
+      "matched": [],
+      "false_positives": [],
+      "false_negatives": []
+    },
+    {
+      "id": "sample_008",
+      "expected": [
+        "security.unsafe_deserialization"
+      ],
+      "detected": [
+        "security.unsafe_deserialization"
+      ],
+      "matched": [
+        "security.unsafe_deserialization"
+      ],
+      "false_positives": [],
+      "false_negatives": []
+    },
+    {
+      "id": "sample_009",
+      "expected": [],
+      "detected": [],
+      "matched": [],
+      "false_positives": [],
+      "false_negatives": []
+    },
+    {
+      "id": "sample_010",
+      "expected": [
+        "security.insecure_random"
+      ],
+      "detected": [
+        "security.insecure_random"
+      ],
+      "matched": [
+        "security.insecure_random"
+      ],
+      "false_positives": [],
+      "false_negatives": []
+    },
+    {
+      "id": "sample_011",
+      "expected": [],
+      "detected": [],
+      "matched": [],
+      "false_positives": [],
+      "false_negatives": []
+    },
+    {
+      "id": "sample_012",
+      "expected": [
+        "security.ssl_disabled"
+      ],
+      "detected": [
+        "security.ssl_disabled"
+      ],
+      "matched": [
+        "security.ssl_disabled"
+      ],
+      "false_positives": [],
+      "false_negatives": []
+    },
+    {
+      "id": "sample_013",
+      "expected": [],
+      "detected": [],
+      "matched": [],
       "false_positives": [],
       "false_negatives": []
     }

@@ -1,6 +1,6 @@
 {
-  "version": "22.0.0",
-  "total_samples": 5,
+  "version": "22.2.0",
+  "total_samples": 13,
   "samples": [
     {
       "id": "sample_001",
@@ -46,6 +46,70 @@
       "file_path": "benchmarks/v22/sample_005_long_function.py",
       "code": "def long_function():\n    values = [\n        0,\n        1,\n        2,\n        3,\n        4,\n        5,\n        6,\n        7,\n        8,\n        9,\n        10,\n        11,\n        12,\n        13,\n        14,\n        15,\n        16,\n        17,\n        18,\n        19,\n        20,\n        21,\n        22,\n        23,\n        24,\n        25,\n        26,\n        27,\n        28,\n        29,\n        30,\n        31,\n        32,\n        33,\n        34,\n        35,\n        36,\n        37,\n        38,\n        39,\n        40,\n        41,\n        42,\n        43,\n        44,\n        45,\n        46,\n        47,\n        48,\n        49,\n        50,\n    ]\n    return values",
       "expected_issues": ["code_quality.function_too_long"]
+    },
+    {
+      "id": "sample_006",
+      "name": "shell_execution_with_shell_enabled",
+      "category": "security",
+      "severity": "critical",
+      "code": "import subprocess\nsubprocess.run(command, shell=True)\n",
+      "expected_issues": ["security.command_injection"]
+    },
+    {
+      "id": "sample_007",
+      "name": "parameterized_sql_control",
+      "category": "negative_control",
+      "severity": "none",
+      "code": "cursor.execute(\"SELECT * FROM users WHERE id = %s\", (user_id,))\n",
+      "expected_issues": []
+    },
+    {
+      "id": "sample_008",
+      "name": "unsafe_pickle_deserialization",
+      "category": "security",
+      "severity": "critical",
+      "code": "import pickle\nvalue = pickle.loads(payload)\n",
+      "expected_issues": ["security.unsafe_deserialization"]
+    },
+    {
+      "id": "sample_009",
+      "name": "safe_yaml_loader_control",
+      "category": "negative_control",
+      "severity": "none",
+      "code": "import yaml\nvalue = yaml.safe_load(stream)\n",
+      "expected_issues": []
+    },
+    {
+      "id": "sample_010",
+      "name": "non_cryptographic_random_token",
+      "category": "security",
+      "severity": "warning",
+      "code": "import random\ntoken = random.randint(0, 999999)\n",
+      "expected_issues": ["security.insecure_random"]
+    },
+    {
+      "id": "sample_011",
+      "name": "cryptographic_random_control",
+      "category": "negative_control",
+      "severity": "none",
+      "code": "import secrets\ntoken = secrets.token_urlsafe(32)\n",
+      "expected_issues": []
+    },
+    {
+      "id": "sample_012",
+      "name": "tls_verification_disabled",
+      "category": "security",
+      "severity": "critical",
+      "code": "import requests\nrequests.get(url, verify=False)\n",
+      "expected_issues": ["security.ssl_disabled"]
+    },
+    {
+      "id": "sample_013",
+      "name": "tls_verification_enabled_control",
+      "category": "negative_control",
+      "severity": "none",
+      "code": "import requests\nrequests.get(url, verify=True)\n",
+      "expected_issues": []
     }
   ]
 }

@@ -58,3 +58,16 @@ def test_long_function_annotation_contains_the_labeled_source_lines():
 
     assert len(sample["code"].splitlines()) > 50
     assert evaluate([sample])["false_negatives"] == 0
+
+
+def test_checked_in_scanner_benchmark_has_no_unmatched_findings():
+    benchmark_path = (
+        Path(__file__).parent.parent / "benchmarks" / "v22" / "annotated_samples.json"
+    )
+    samples = json.loads(benchmark_path.read_text(encoding="utf-8"))["samples"]
+
+    result = evaluate(samples)
+
+    assert result["annotated_samples"] == 13
+    assert result["false_positives"] == 0
+    assert result["false_negatives"] == 0

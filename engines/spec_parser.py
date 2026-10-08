@@ -1,5 +1,6 @@
 """Load, validate, and save project quality specifications."""
 
+import os
 from dataclasses import asdict, dataclass, field
 from math import isfinite
 from pathlib import Path
@@ -9,6 +10,17 @@ import yaml
 
 
 SEVERITY_LEVELS = ("critical", "high", "warning", "info")
+LANGUAGE_DETECTION_EXCLUDED_DIRECTORIES = {
+    ".git",
+    ".hg",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "env",
+    "node_modules",
+    "venv",
+}
 
 
 @dataclass
@@ -256,12 +268,33 @@ class SpecParser:
 
     @staticmethod
     def _detect_language(project_path: Path) -> str:
-        if (project_path / "pyproject.toml").exists() or any(project_path.glob("*.py")):
+        has_python = (project_path / "pyproject.toml").exists() or SpecParser._has_python_source(
+            project_path
+        )
+        has_go = (project_path / "go.mod").exists()
+        if has_python and has_go:
+            return "mixed"
+        if has_python:
             return "python"
         if (project_path / "package.json").exists():
             return "typescript"
-        if (project_path / "go.mod").exists():
+        if has_go:
             return "go"
         if (project_path / "Cargo.toml").exists():
             return "rust"
         return "python"
+
+    @staticmethod
+    def _has_python_source(project_path: Path) -> bool:
+        if not project_path.is_dir():
+            return False
+        for _, directories, file_names in os.walk(project_path):
+            directories[:] = [
+                name
+                for name in directories
+                if name not in LANGUAGE_DETECTION_EXCLUDED_DIRECTORIES
+                and not name.startswith(".")
+            ]
+            if any(file_name.endswith(".py") for file_name in file_names):
+                return True
+        return False

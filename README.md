@@ -6,7 +6,7 @@ Code Quality Guard helps agents inspect project conventions, catch a focused set
 
 ## Scope
 
-The scanner analyzes Python `.py` and Go `.go` files. Python checks use the AST and tokenizer; Go checks delegate formatting and static analysis to the Go toolchain. The analyzers do not perform interprocedural taint analysis, prove exploitability, or guarantee that all vulnerabilities are detected.
+The scanner analyzes Python `.py` and Go `.go` files, including projects containing both languages. Python checks use the AST and tokenizer; Go checks delegate formatting and static analysis to the Go toolchain. The analyzers do not perform interprocedural taint analysis, prove exploitability, or guarantee that all vulnerabilities are detected.
 
 Python checks include risky dynamic execution, hardcoded secret-like string assignments, dynamic SQL strings, disabled TLS verification, shell execution, unsafe deserialization, literal parent-directory paths, weak `random` calls, broad exception handling, TODO/FIXME comments, and configurable function/parameter/nesting/line-length/docstring checks. Go checks run `gofmt -l` and `go vet -json ./...` from a module root containing `go.mod`. The YAML rule catalog is loaded at runtime and included in built distributions.
 
@@ -26,10 +26,13 @@ python -m pytest
 ## Use
 
 ```bash
-# Scan a project or a Python source file; scan Go from its module root
+# Scan Python, Go, or an automatically detected mixed project
 qguard .
 qguard src/service.py
 qguard gate . --min-score 70
+
+# Opt in to running project tests as part of the gate
+qguard . --run-tests
 
 # Save the complete JSON report
 qguard . --config qguard.yaml --output build/qguard.json
@@ -44,7 +47,9 @@ qguard . --spec-only --output qguard.yaml
 
 The scanner reports file read, decoding, and syntax errors and fails the gate rather than silently treating those files as clean. Exit codes are `0` for pass, `1` for warning, and `2` for failure or scan error. If the selected language has no scannable source files, the scan fails with an explicit scope message.
 
-Go scans require `go` and `gofmt` on `PATH`. Formatting differences are findings; any `go vet` diagnostic fails the gate. qguard does not run `go test` or `govulncheck`; run project tests separately.
+Go scans require a module-root `go.mod` and `go` and `gofmt` on `PATH`. Both formatting differences and `go vet` diagnostics fail the gate. `--run-tests` runs `python -m pytest` and/or `go test ./...` for the selected language(s), with a 300-second timeout per command; it is opt-in because test suites execute project code. Test output is shown in the terminal and each command's status and exit code are included in JSON reports. qguard does not run `govulncheck`.
+
+Automatic language detection examines nested source directories while skipping hidden and common generated/virtual-environment directories. A project with both Python and `go.mod` is reported as `mixed`; it runs both analyzers. Set `language: mixed` explicitly if detection is ambiguous.
 
 ## Configuration
 
@@ -77,7 +82,7 @@ quality_gate:
 
 `max_severity` is a reporting threshold: `critical` reports only critical security findings; `info` reports every security severity. Ignore patterns apply to entire Python files and match either the relative path or filename. Unsupported or misspelled settings are rejected instead of silently ignored.
 
-For Go, set `language: go` when automatic detection is ambiguous. Python-specific `code_quality` thresholds do not apply to Go. See [Go checks](references/go.md) for tool behavior and implementation guidance.
+For Go, set `language: go` when automatic detection is ambiguous. Use `language: mixed` for repositories containing both supported languages. Python-specific `code_quality` thresholds do not apply to Go. See [Go checks](references/go.md) for tool behavior and implementation guidance.
 
 ## Tests And Benchmark
 
@@ -87,7 +92,7 @@ python scripts/run_tests.py
 python scripts/evaluate_benchmark.py
 ```
 
-The reproducible benchmark currently contains five hand-annotated examples. Its evaluation unit is the unique rule ID per sample. The latest run reports precision `1.000`, recall `1.000`, and F1 `1.000`. These small examples are a smoke benchmark, not evidence of production precision or recall. The 6,614 collected source snippets in `benchmarks/v22/real_samples/` do not have ground-truth labels and are not included in these metrics.
+The scanner benchmark contains 13 hand-annotated positive and negative-control examples. Its evaluation unit is the unique rule ID per sample. The current smoke run reports precision `1.000`, recall `1.000`, and F1 `1.000`; this small set is not evidence of production precision or recall. The 6,614 collected source snippets in `benchmarks/v22/real_samples/` have no ground-truth labels and are not included in these metrics. A separate human-rated protocol evaluates whether the skill improves coding-agent implementation fidelity; see [the behavior benchmark](benchmarks/implementation-fidelity/README.md). No model behavior score is claimed by the scanner metrics.
 
 ## Project Files
 
@@ -96,6 +101,7 @@ The reproducible benchmark currently contains five hand-annotated examples. Its 
 - `rules/v22/v22_rules.yaml`: runtime rule metadata.
 - `scripts/qguard.py`: CLI.
 - `scripts/evaluate_benchmark.py`: reproducible annotated-sample evaluation.
+- `benchmarks/implementation-fidelity/`: paired, human-rated agent behavior evaluation protocol.
 - `tests/`: pytest regression tests and the original YAML smoke suite.
 - `references/`: agent guidance and configuration documentation.
 
