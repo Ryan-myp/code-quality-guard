@@ -2,12 +2,12 @@
 name: code-quality-guard
 description: Use when implementing, refactoring, or reviewing code, especially when work must follow a technical design, preserve intended extension points, and be verified with tests and explicit quality checks.
 metadata:
-  version: "22.1.0a1"
+  version: "22.2.0a1"
 ---
 
 # Code Quality Guard
 
-Help coding agents deliver correct, maintainable, and secure changes while preserving the user's requested scope. The guidance below applies across programming languages. The bundled analyzer currently supports Python only.
+Help coding agents deliver correct, maintainable, and secure changes while preserving the user's requested scope. The implementation guidance applies across programming languages. The bundled analyzer supports Python and Go checks.
 
 ## Workflow
 
@@ -40,9 +40,9 @@ Compare the changed files and tests with the implementation map during substanti
 
 Treat thresholds and analyzer findings as prompts to inspect context, not as proof of a defect. Do not modify unrelated code just to silence a check.
 
-## Optional Python Analyzer
+## Optional Analyzers
 
-Use the bundled scanner when it adds signal for Python changes:
+Use the bundled scanner when it adds signal for supported languages:
 
 ```bash
 SKILL_DIR="${CODEX_HOME:-$HOME/.codex}/skills/code-quality-guard"
@@ -50,11 +50,11 @@ python3 "$SKILL_DIR/scripts/qguard.py" /path/to/project --verbose
 python3 "$SKILL_DIR/scripts/qguard.py" gate /path/to/project --min-score 70
 ```
 
-The analyzer supports Python `.py` files only. It uses AST and tokenizer checks, but does not perform interprocedural data-flow analysis or prove exploitability. Invalid Python, unreadable files, and scans with no eligible Python files fail the gate. Review the findings and verify them with the target project's tests and tools; do not use this scanner as the sole security or CI gate.
+The Python analyzer checks `.py` files with AST and tokenizer rules; it does not perform interprocedural data-flow analysis or prove exploitability. The Go analyzer requires a module-root `go.mod` and Go tools on `PATH`; it runs `gofmt` and `go vet -json ./...`. It does not run `go test`, `govulncheck`, or a custom Go AST/data-flow analysis. Invalid source, unavailable tools, unreadable files, and scans with no eligible source files fail closed. Review findings and run the target project's tests and other relevant tools; do not use this scanner as the sole security or CI gate.
 
 Use `--config` for a checked-in project spec. `--spec-only` writes a starter spec; choose an explicit output path before running it. `--sarif` exports SARIF 2.1.0 and `--agent-rules` exports scan-specific guidance YAML.
 
-For scanner rule semantics or configuration, consult [references/rules.md](references/rules.md) and [references/spec-guide.md](references/spec-guide.md). Use [references/best-practices.md](references/best-practices.md) for concise implementation guidance. Feedback is local storage only; see [references/feedback.md](references/feedback.md) when the task concerns feedback records.
+For Go implementation and validation details, consult [references/go.md](references/go.md). For scanner rule semantics or configuration, consult [references/rules.md](references/rules.md) and [references/spec-guide.md](references/spec-guide.md). Use [references/best-practices.md](references/best-practices.md) for concise implementation guidance. Feedback is local storage only; see [references/feedback.md](references/feedback.md) when the task concerns feedback records.
 
 To run the bundled checks:
 

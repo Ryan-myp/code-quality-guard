@@ -19,7 +19,7 @@ def test_discover_files_rejects_unsupported_single_file(tmp_path):
     target = tmp_path / "one.ts"
     target.write_text("const value = 1\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="Python"):
+    with pytest.raises(ValueError, match="supported"):
         discover_files(target)
 
 
@@ -81,10 +81,10 @@ def test_run_analysis_honors_security_ignore_patterns(tmp_path):
     assert result["total_issues"] == 1
 
 
-def test_run_analysis_rejects_non_python_project_spec(tmp_path):
+def test_run_analysis_rejects_unsupported_project_language(tmp_path):
     (tmp_path / "app.py").write_text("value = 1\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="supports Python only"):
+    with pytest.raises(ValueError, match="supports Python and Go"):
         run_analysis(tmp_path, ProjectSpec(language="typescript"))
 
 

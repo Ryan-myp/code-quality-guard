@@ -1,14 +1,14 @@
 # Code Quality Guard
 
-> Python code-quality guidance and static checks for AI coding agents.
+> Cross-language implementation guidance with Python and Go static checks for AI coding agents.
 
 Code Quality Guard helps agents inspect project conventions, catch a focused set of common defects, and verify work before handing it back. It is an advisory heuristic, not a substitute for tests, review, a security audit, or a language-aware static-analysis platform.
 
 ## Scope
 
-The scanner currently analyzes **Python `.py` files only**. It uses Python's AST for code rules, so calls or assignments inside comments and string literals are not treated as executable code. It does not perform interprocedural taint analysis, prove exploitability, or guarantee that all vulnerabilities are detected.
+The scanner analyzes Python `.py` and Go `.go` files. Python checks use the AST and tokenizer; Go checks delegate formatting and static analysis to the Go toolchain. The analyzers do not perform interprocedural taint analysis, prove exploitability, or guarantee that all vulnerabilities are detected.
 
-Current checks include risky dynamic execution, hardcoded secret-like string assignments, dynamic SQL strings, disabled TLS verification, shell execution, unsafe deserialization, literal parent-directory paths, weak `random` calls, broad exception handling, TODO/FIXME comments, and configurable function/parameter/nesting/line-length/docstring checks. The YAML rule catalog is loaded at runtime and included in built distributions.
+Python checks include risky dynamic execution, hardcoded secret-like string assignments, dynamic SQL strings, disabled TLS verification, shell execution, unsafe deserialization, literal parent-directory paths, weak `random` calls, broad exception handling, TODO/FIXME comments, and configurable function/parameter/nesting/line-length/docstring checks. Go checks run `gofmt -l` and `go vet -json ./...` from a module root containing `go.mod`. The YAML rule catalog is loaded at runtime and included in built distributions.
 
 ## Install
 
@@ -26,7 +26,7 @@ python -m pytest
 ## Use
 
 ```bash
-# Scan a project or a single Python file
+# Scan a project or a Python source file; scan Go from its module root
 qguard .
 qguard src/service.py
 qguard gate . --min-score 70
@@ -42,7 +42,9 @@ qguard . --agent-rules --output build/agent-rules.yaml
 qguard . --spec-only --output qguard.yaml
 ```
 
-The scanner reports file read, decoding, and syntax errors and fails the gate rather than silently treating those files as clean. Exit codes are `0` for pass, `1` for warning, and `2` for failure or scan error. If a project contains no scannable Python files, the scan fails with an explicit scope message.
+The scanner reports file read, decoding, and syntax errors and fails the gate rather than silently treating those files as clean. Exit codes are `0` for pass, `1` for warning, and `2` for failure or scan error. If the selected language has no scannable source files, the scan fails with an explicit scope message.
+
+Go scans require `go` and `gofmt` on `PATH`. Formatting differences are findings; any `go vet` diagnostic fails the gate. qguard does not run `go test` or `govulncheck`; run project tests separately.
 
 ## Configuration
 
@@ -75,6 +77,8 @@ quality_gate:
 
 `max_severity` is a reporting threshold: `critical` reports only critical security findings; `info` reports every security severity. Ignore patterns apply to entire Python files and match either the relative path or filename. Unsupported or misspelled settings are rejected instead of silently ignored.
 
+For Go, set `language: go` when automatic detection is ambiguous. Python-specific `code_quality` thresholds do not apply to Go. See [Go checks](references/go.md) for tool behavior and implementation guidance.
+
 ## Tests And Benchmark
 
 ```bash
@@ -101,4 +105,4 @@ See [the rule catalog](rules/v22/v22_rules.yaml), [spec guide](references/spec-g
 
 MIT. See [LICENSE](LICENSE).
 
-*Updated: September 24, 2026.*
+*Updated: October 8, 2026.*

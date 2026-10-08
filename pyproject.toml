@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "code-quality-guard"
-version = "22.1.0a1"
+version = "22.2.0a1"
 description = "AI Coding Agent 代码质量守护系统"
 readme = "README.md"
 license = {text = "MIT"}

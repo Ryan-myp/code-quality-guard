@@ -16,8 +16,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engines.agent_ruleset import generate_agent_rules
-from engines.enhanced_analyzer import EnhancedAnalyzer, Issue
+from engines.enhanced_analyzer import EnhancedAnalyzer, Issue, Severity
 from engines.fix_suggester import FixSuggester
+from engines.go_analyzer import GoAnalyzer
 from engines.quality_gate import GateConfig, QualityGate
 from engines.sarif_generator import generate_sarif
 from engines.spec_parser import ProjectSpec, SpecParser
@@ -38,22 +39,34 @@ EXCLUDED_DIRECTORIES = {
 
 
 def discover_files(project_path: Path, extensions: Optional[List[str]] = None) -> List[Path]:
-    """Discover supported source files. The analyzer currently supports Python only."""
+    """Discover supported Python or Go source files."""
     project_path = Path(project_path)
-    if extensions is not None and any(extension != ".py" for extension in extensions):
-        raise ValueError("Only Python (.py) files are supported")
+    selected_extensions = [extension.lower() for extension in (extensions or [".py"])]
+    unsupported = set(selected_extensions) - {".py", ".go"}
+    if unsupported:
+        raise ValueError(
+            "Unsupported source extension(s): {}. Supported extensions are .py and .go.".format(
+                ", ".join(sorted(unsupported))
+            )
+        )
     if not project_path.exists():
         raise FileNotFoundError("Path does not exist: {}".format(project_path))
     if project_path.is_file():
-        if project_path.suffix.lower() != ".py":
-            raise ValueError("Only Python (.py) files are supported: {}".format(project_path))
+        if project_path.suffix.lower() not in selected_extensions:
+            raise ValueError(
+                "Unsupported source file '{}'; expected one of {}.".format(
+                    project_path, ", ".join(selected_extensions)
+                )
+            )
         return [project_path]
     if not project_path.is_dir():
         raise ValueError("Path is not a regular file or directory: {}".format(project_path))
 
     files = []
-    for path in project_path.rglob("*.py"):
+    for path in project_path.rglob("*"):
         if not path.is_file():
+            continue
+        if path.suffix.lower() not in selected_extensions:
             continue
         try:
             relative_parts = path.relative_to(project_path).parts
@@ -135,15 +148,40 @@ def _scan_files(project_path: Path, spec: ProjectSpec):
     return files, file_results, all_issues, scan_errors, analyzer
 
 
+def _summarize_issues(issues: List[Issue]) -> Dict[str, Any]:
+    by_severity = {
+        severity.value: sum(1 for issue in issues if issue.severity == severity)
+        for severity in Severity
+    }
+    by_rule: Dict[str, int] = {}
+    for issue in issues:
+        by_rule[issue.rule_id] = by_rule.get(issue.rule_id, 0) + 1
+    return {
+        "total_issues": len(issues),
+        "by_severity": by_severity,
+        "by_rule": by_rule,
+    }
+
+
 def _evaluate_gate(
     spec: ProjectSpec,
     issues: List[Issue],
     scan_errors: List[Dict[str, str]],
     min_score: Optional[float],
+    fail_on_any_rules: Optional[List[str]] = None,
 ):
     gate = QualityGate(GateConfig(**asdict(spec.quality_gate)))
     result = gate.check(issues)
     score = gate.get_score(issues)
+    blocking_rules = sorted(
+        {
+            issue.rule_id
+            for issue in issues
+            if fail_on_any_rules and issue.rule_id in fail_on_any_rules
+        }
+    )
+    if blocking_rules:
+        gate.fail("blocking_findings", rule_ids=blocking_rules)
     if min_score is not None and score < min_score:
         gate.fail(
             "below_min_score",
@@ -159,46 +197,63 @@ def _evaluate_gate(
     return gate, gate.result or result, score
 
 
-def run_analysis(
-    project_path: Path,
-    spec: ProjectSpec,
-    verbose: bool = False,
-    min_score: Optional[float] = None,
-) -> Dict[str, Any]:
-    """Scan Python files and fail closed if any file could not be analyzed."""
-    project_path = Path(project_path)
-    validation_errors = spec.validate()
-    if validation_errors:
-        raise ValueError("Invalid project spec: {}".format("; ".join(validation_errors)))
-    if spec.language.lower() not in ("python", "py"):
-        raise ValueError(
-            "Unsupported language '{}': the analyzer currently supports Python only.".format(
-                spec.language
-            )
-        )
-    if min_score is not None and (
-        isinstance(min_score, bool)
-        or not isinstance(min_score, (int, float))
-        or not math.isfinite(min_score)
-        or not 0 <= min_score <= 100
-    ):
-        raise ValueError("min_score must be a finite number from 0 to 100")
-    files, file_results, all_issues, scan_errors, analyzer = _scan_files(
+def _run_python_analysis(project_path: Path, spec: ProjectSpec):
+    files, file_results, issues, scan_errors, analyzer = _scan_files(
         project_path, spec
     )
-    gate, gate_result, quality_score = _evaluate_gate(
-        spec, all_issues, scan_errors, min_score
+    return (
+        files,
+        file_results,
+        issues,
+        scan_errors,
+        analyzer.get_summary(issues),
+        [],
     )
-    suggester = FixSuggester()
-    summary = analyzer.get_summary(all_issues)
-    suggestions = suggester.prioritize(suggester.suggest_batch(all_issues))
+
+
+def _run_go_analysis(project_path: Path):
+    files = discover_files(project_path, extensions=[".go"])
+    go_result = GoAnalyzer().analyze(project_path, files)
+    file_results = {
+        file_name: [_issue_to_dict(issue) for issue in issues]
+        for file_name, issues in go_result.file_results.items()
+    }
+    issues = [
+        issue
+        for file_issues in go_result.file_results.values()
+        for issue in file_issues
+    ]
+    return (
+        files,
+        file_results,
+        issues,
+        go_result.scan_errors,
+        _summarize_issues(issues),
+        ["go.vet"],
+    )
+
+
+def _build_analysis_report(
+    project_path: Path,
+    language: str,
+    spec: ProjectSpec,
+    analysis,
+    min_score: Optional[float],
+) -> Dict[str, Any]:
+    files, file_results, issues, scan_errors, summary, fail_rules = analysis
+    gate, gate_result, quality_score = _evaluate_gate(
+        spec, issues, scan_errors, min_score, fail_on_any_rules=fail_rules
+    )
+    suggestions = FixSuggester().prioritize(
+        FixSuggester().suggest_batch(issues)
+    )
     return {
         "project": str(project_path),
-        "language": "python",
+        "language": language,
         "files_found": len(files),
         "files_scanned": len(file_results),
-        "files_with_issues": sum(bool(issues) for issues in file_results.values()),
-        "total_issues": len(all_issues),
+        "files_with_issues": sum(bool(items) for items in file_results.values()),
+        "total_issues": len(issues),
         "gate_result": gate_result.value,
         "gate_details": gate.details,
         "quality_score": quality_score,
@@ -209,6 +264,42 @@ def run_analysis(
         "suggestions": suggestions,
         "summary": summary,
     }
+
+
+def run_analysis(
+    project_path: Path,
+    spec: ProjectSpec,
+    verbose: bool = False,
+    min_score: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Scan a Python project or a Go module and fail closed on scan errors."""
+    project_path = Path(project_path)
+    validation_errors = spec.validate()
+    if validation_errors:
+        raise ValueError("Invalid project spec: {}".format("; ".join(validation_errors)))
+    language = spec.language.lower()
+    if language not in ("python", "py", "go", "golang"):
+        raise ValueError(
+            "Unsupported language '{}': the analyzer currently supports Python and Go.".format(
+                spec.language
+            )
+        )
+    if min_score is not None and (
+        isinstance(min_score, bool)
+        or not isinstance(min_score, (int, float))
+        or not math.isfinite(min_score)
+        or not 0 <= min_score <= 100
+    ):
+        raise ValueError("min_score must be a finite number from 0 to 100")
+    if language in ("python", "py"):
+        language = "python"
+        analysis = _run_python_analysis(project_path, spec)
+    else:
+        language = "go"
+        analysis = _run_go_analysis(project_path)
+    return _build_analysis_report(
+        project_path, language, spec, analysis, min_score
+    )
 
 
 def _write_output(output_path: Path, data: Any, output_format: str = "json") -> None:
@@ -226,9 +317,12 @@ def _exit_status(result: Dict[str, Any]) -> int:
 
 def _argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Code Quality Guard: Python code quality checks for coding agents"
+        description="Code Quality Guard: Python and Go checks for coding agents"
     )
-    parser.add_argument("path", help="Python project directory or .py file")
+    parser.add_argument(
+        "path",
+        help="Python project, Go module root, or Python source file",
+    )
     parser.add_argument("--verbose", "-v", action="store_true", help="List scanned files")
     parser.add_argument("--spec-only", action="store_true", help="Generate a project spec")
     exports = parser.add_mutually_exclusive_group()
@@ -246,6 +340,8 @@ def _load_spec(project_path: Path, config_path: Optional[str]) -> ProjectSpec:
         return spec_parser.load(Path(config_path).expanduser())
     if project_path.is_dir():
         return spec_parser.auto_generate(project_path)
+    if project_path.suffix.lower() == ".go":
+        return ProjectSpec(language="go")
     return ProjectSpec()
 
 

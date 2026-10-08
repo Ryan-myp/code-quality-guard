@@ -1,10 +1,10 @@
 # Project Spec
 
-The project spec controls the checks performed by the current Python scanner. Unknown keys are rejected so a typo cannot silently disable a policy.
+The project spec selects the Python or Go checks. Unknown keys are rejected so a typo cannot silently disable a policy.
 
 ```yaml
 name: my-project
-language: python
+language: python # use go for a Go module
 
 security:
   max_severity: info
@@ -33,7 +33,7 @@ quality_gate:
 
 The code-quality limits count physical source lines for function length, count explicit parameters (excluding `self` or `cls` on methods), and count nested control-flow blocks. Docstring checks apply to public functions and classes when enabled. TODO comments are informational; TODO age is not inferred.
 
-`quality_gate` values determine pass, warning, and failure thresholds. Any scan error, invalid Python syntax, or scan with no eligible Python files fails closed. A gate warning returns exit code `1`; a failed gate or scan error returns `2`.
+`quality_gate` values determine pass, warning, and failure thresholds. Python code-quality thresholds apply only to Python. Go checks require `go.mod`, `go`, and `gofmt`; any Go vet diagnostic or scan error fails closed. A gate warning returns exit code `1`; a failed gate or scan error returns `2`.
 
 Generate a starter file with:
 
@@ -41,4 +41,4 @@ Generate a starter file with:
 qguard . --spec-only --output qguard.yaml
 ```
 
-The current scanner supports Python only. `language` is retained as explicit project metadata; selecting another language does not enable parsing for it.
+The Python scanner uses AST and tokenizer rules. The Go scanner delegates formatting and static diagnostics to `gofmt` and `go vet`; it does not parse Go source itself. Set `language: go` explicitly for mixed-language projects when automatic detection is ambiguous.

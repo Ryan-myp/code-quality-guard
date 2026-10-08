@@ -1,5 +1,5 @@
-version: "22.1"
-description: "Python AST rule catalog used by Code Quality Guard."
+version: "22.2"
+description: "Python and Go check metadata used by Code Quality Guard."
 rules:
   - id: security.eval_exec
     category: security
@@ -109,3 +109,15 @@ rules:
     description: "存在 TODO/FIXME 标记"
     fix: "创建任务或直接修复"
     confidence: 0.70
+  - id: go.gofmt
+    category: code_quality
+    severity: warning
+    description: "Go 源文件未通过 gofmt 格式化"
+    fix: "运行 gofmt -w 格式化该文件"
+    confidence: 1.0
+  - id: go.vet
+    category: code_quality
+    severity: warning
+    description: "Go vet 静态分析发现问题"
+    fix: "修复诊断并重新运行 go vet ./..."
+    confidence: 1.0

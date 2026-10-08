@@ -33,3 +33,10 @@ These are review prompts, not blanket prohibitions. A broad handler can be appro
 - `ai_slop.redundant_todo`: reports TODO/FIXME comment tokens, not occurrences inside string literals. It does not infer age.
 
 AST-based checks require valid Python syntax. Invalid files are reported as scan errors and fail the quality gate.
+
+## Go
+
+- `go.gofmt`: reports Go files that `gofmt -l` identifies as needing formatting.
+- `go.vet`: reports diagnostics from `go vet -json ./...`. Any such diagnostic fails the gate.
+
+Go checks require a module-root `go.mod`, `go`, and `gofmt` on `PATH`. They use the Go toolchain's default vet analyzers; they do not run `go test`, `govulncheck`, or custom Go data-flow analysis.
